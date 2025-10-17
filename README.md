@@ -8,4 +8,4 @@
 ## Run
 ```bash
 pip install -r requirements.txt
-streamlit run -m .app.main
+streamlit run main.py

@@ -1,7 +1,7 @@
 from infra.providers.base import ProviderConfig
 from infra.providers.openai_client import OpenAIClient
 from infra.providers.azure_client import AzureOpenAIClient
-from application.code_review_service import CodeReviewService
+from domain.application.code_review_service import CodeReviewService
 
 
 def build_code_review_service(provider: str, api_key: str, model: str,

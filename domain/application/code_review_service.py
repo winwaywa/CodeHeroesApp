@@ -1,6 +1,6 @@
 from typing import Optional
 from domain.ports import LLMClientPort, CodeReviewPort, ChatMessage
-from application.prompts import (
+from domain.application.prompts import (
     review_system_prompt,
     build_review_user_prompt,
     fix_system_prompt,

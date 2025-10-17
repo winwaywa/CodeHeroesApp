@@ -1,9 +1,9 @@
 import streamlit as st
-from core.settings import settings
-from composition import build_code_review_service
-from infra.utils.decoding import safe_decode
-from infra.utils.language import guess_lang_from_name
-from infra.utils.markdown import extract_code_block
+from config.settings import settings
+from infra.factories.code_review_factory import build_code_review_service
+from utils.decoding import safe_decode
+from utils.language import guess_lang_from_name
+from utils.markdown import extract_code_block
 from domain.models import EXT_MAP
 
 APP_TITLE = "Code Heroes"
@@ -115,7 +115,7 @@ if st.session_state.last_review_md:
                                        code=st.session_state.last_code,
                                        review_summary=st.session_state.last_review_md)
                 status.update(label="✅ Đã tạo bản sửa", state="complete")
-            from infra.utils.markdown import extract_code_block
+            from utils.markdown import extract_code_block
             fixed_code, fenced_lang = extract_code_block(fixed_md)
             st.session_state.fixed_code_block = (fixed_code or fixed_md).strip()
         except Exception as e:
