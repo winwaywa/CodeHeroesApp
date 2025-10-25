@@ -5,63 +5,30 @@ from utils.decoding import safe_decode
 from utils.language import guess_lang_from_name
 from utils.markdown import extract_code_block
 from domain.models import EXT_MAP
-from dotenv import load_dotenv
 
+# Thêm import cho ChromaDB và gTTS
 import chromadb
 from chromadb.utils import embedding_functions
-import numpy as np
+from gtts import gTTS
 import io
-import soundfile as sf
-import requests
-import os
 
 APP_TITLE = "Code Heroes"
-load_dotenv()
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🛠️", layout="wide")
-st.title("🛠️ " + APP_TITLE)
+st.title("🛠️" + APP_TITLE)
 st.caption("Nhập code hoặc upload file. Review → Fix.")
 
-# ---- ElevenLabs API ----
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
-
-def elevenlabs_tts(text, voice_id=ELEVENLABS_VOICE_ID, api_key=ELEVENLABS_API_KEY, model_id="eleven_multilingual_v2"):
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    headers = {
-        "Accept": "audio/mpeg",
-        "xi-api-key": api_key,
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "text": text,
-        "model_id": model_id,
-        "output_format": "mp3"
-    }
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-        return response.content
-    else:
-        raise Exception(f"ElevenLabs TTS error: {response.status_code} {response.text}")
-
-# ---- ChromaDB Embedding ----
+# Khởi tạo ChromaDB client và collection
+chroma_client = chromadb.Client()
+collection = chroma_client.get_or_create_collection(name="code_review_heroes")
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key=settings.OPENAI_API_KEY,
     model_name="text-embedding-ada-002"
 )
-chroma_client = chromadb.Client(
-    chromadb.config.Settings(
-        persist_directory="./chromadb_data"
-    )
-)
-collection = chroma_client.get_or_create_collection(
-    name="code_review_heroes",
-    embedding_function=openai_ef
-)
 
 with st.sidebar:
     st.subheader("⚙️ Settings")
-    provider = st.selectbox(label="Provider", options=["OpenAI", "Azure OpenAI"], index=1)
+    provider = st.selectbox(label="Provider",options=["OpenAI", "Azure OpenAI"],index=1)
 
     if provider == "OpenAI":
         api_key = st.text_input("OpenAI API Key", type="password", help="Hoặc đặt OPENAI_API_KEY.", value=settings.OPENAI_API_KEY)
@@ -79,6 +46,7 @@ with st.sidebar:
         ], index=0)
     note = st.text_area("Ghi chú review (tuỳ chọn)")
 
+# Tabs
 _tab_paste, _tab_file = st.tabs(["✍️ Paste code", "📁 Upload file"])
 
 with _tab_paste:
@@ -128,82 +96,54 @@ else:
                                         azure_api_base=azure_api_base or settings.AZURE_OPENAI_API_BASE,
                                         azure_api_version=azure_api_version or settings.AZURE_OPENAI_API_VERSION)
 
-# ==== LOGIC TÌM VÀ SINH REVIEW ====
-SIMILARITY_THRESHOLD = 0.85
-
-def get_similar_review(code):
-    results = collection.query(
-        query_texts=[code],
-        n_results=1
-    )
-    if results and results.get("distances") and results["distances"][0]:
-        score = 1 - results["distances"][0][0]
-        if score >= SIMILARITY_THRESHOLD:
-            doc = results["documents"][0][0]
-            meta = results["metadatas"][0][0]
-            return doc, meta, score
-    return None, None, None
-
+# Buttons
 c1, _, _ = st.columns([1, 1, 2])
 with c1:
     do_review = st.button("🔍 Review", use_container_width=True, disabled=(not active_code))
 
+# Actions
 if do_review:
     try:
-        ids = collection.get()["ids"]
-    except Exception:
-        ids = []
-    is_empty = (not ids)
-
-    similar_doc, similar_meta, similarity = (None, None, None)
-    if not is_empty:
-        similar_doc, similar_meta, similarity = get_similar_review(active_code)
-
-    if similar_doc:
+        with st.status("Đang review…", expanded=True) as status:
+            st.write("Provider:", provider)
+            st.write("Model / Deployment:", model)
+            st.write("Language:", active_lang)
+            review_md = service.review(language=active_lang, code=active_code, extra_note=note)
+            status.update(label="✅ Review xong", state="complete")
         st.session_state.last_code = active_code
         st.session_state.last_lang = active_lang
-        st.session_state.last_review_md = similar_doc
+        st.session_state.last_review_md = review_md
         st.session_state.fixed_code_block = ""
-        st.markdown(f":bulb: Đã tìm thấy review tương tự trong ChromaDB (similarity: {similarity:.2f})")
-    else:
-        try:
-            with st.status("Đang review…", expanded=True) as status:
-                st.write("Provider:", provider)
-                st.write("Model / Deployment:", model)
-                st.write("Language:", active_lang)
-                review_md = service.review(language=active_lang, code=active_code, extra_note=(note + "\n\nLưu ý: Hãy trả lời kết quả review hoàn toàn bằng tiếng Việt."))
-                status.update(label="✅ Review xong", state="complete")
-            st.session_state.last_code = active_code
-            st.session_state.last_lang = active_lang
-            st.session_state.last_review_md = review_md
-            st.session_state.fixed_code_block = ""
 
-            doc_id = str(hash(active_code + review_md))
-            collection.add(
-                ids=[doc_id],
-                documents=[review_md],
-                metadatas=[{
-                    "lang": active_lang,
-                    "source_code": active_code,
-                    "note": note
-                }]
-            )
-            st.session_state.last_review_id = doc_id
+        # Embed và lưu vào ChromaDB
+        doc_id = str(hash(active_code + review_md))
+        # embedding = openai_ef.embed([review_md])[0]
+        collection.add(
+            ids=[doc_id],
+            # embeddings=[embedding],
+            documents=[review_md],
+            metadatas=[{
+                "lang": active_lang,
+                "source_code": active_code,
+                "note": note
+            }]
+        )
+        st.session_state.last_review_id = doc_id
 
-        except Exception as e:
-            st.exception(e)
+    except Exception as e:
+        st.exception(e)
 
 if st.session_state.last_review_md:
     st.subheader("📋 Kết quả Review")
     st.markdown(st.session_state.last_review_md)
 
-    # Nút phát giọng nói qua ElevenLabs
-    if st.button("🔊 Nghe kết quả review (ElevenLabs TTS)"):
-        try:
-            audio_bytes = elevenlabs_tts(st.session_state.last_review_md)
-            st.audio(audio_bytes, format='audio/mp3')
-        except Exception as e:
-            st.error(f"Lỗi ElevenLabs TTS: {e}")
+    # Nút phát giọng nói
+    if st.button("🔊 Nghe kết quả review"):
+        tts = gTTS(text=st.session_state.last_review_md, lang="vi")
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        st.audio(fp.read(), format="audio/mp3")
 
     auto_fix = st.checkbox("Tự động tạo bản đã sửa sau review", value=False)
     do_fix = auto_fix or st.button("🛠️ Fix code", use_container_width=True)
@@ -217,6 +157,23 @@ if st.session_state.last_review_md:
                 status.update(label="✅ Đã tạo bản sửa", state="complete")
             fixed_code, fenced_lang = extract_code_block(fixed_md)
             st.session_state.fixed_code_block = (fixed_code or fixed_md).strip()
+        except Exception as e:
+            st.exception(e)
+
+    # Tìm kiếm review tương tự
+    st.divider()
+    st.markdown("#### 🔍 Tìm review tương tự (bằng embedding)")
+    search_query = st.text_area("Nhập nội dung tìm kiếm:", "")
+    if st.button("Tìm kiếm review tương tự"):
+        try:
+            # query_embedding = openai_ef.embed([search_query])[0]
+            results = collection.query(
+                query_embeddings=[search_query],
+                n_results=3
+            )
+            st.markdown("**Kết quả gần giống nhất:**")
+            for doc, meta in zip(results['documents'][0], results['metadatas'][0]):
+                st.markdown(f"- **Ngôn ngữ**: `{meta.get('lang')}`\n\n**Nội dung review:**\n\n{doc}")
         except Exception as e:
             st.exception(e)
 
@@ -248,6 +205,6 @@ with st.expander("ℹ️ Notes"):
         - Có thể thay model trong sidebar; với code dài, nên dùng model mạnh hơn.
         - Quy chuẩn (PEP8/OWASP/PSR/MISRA…) hãy ghi rõ tại ô ghi chú.
         - Sau khi review, kết quả sẽ được embed và lưu vào ChromaDB. Bạn có thể tìm kiếm các review tương tự bằng tiếng Việt hoặc bất kỳ ngôn ngữ nào.
-        - Nhấn nút 🔊 để nghe nội dung review bằng giọng nói tiếng Việt (dùng ElevenLabs TTS).
+        - Nhấn nút 🔊 để nghe nội dung review bằng giọng nói tiếng Việt.
         """
-    )
+)

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_BASE: str = ""
     AZURE_OPENAI_DEPLOYMENT: str = ""
     AZURE_OPENAI_API_VERSION: str = "2024-02-15-preview"
+    ELEVENLABS_API_KEY:str = "sk_2b00f16642addbb407bf378001834da6a5c2cc882e624c18"
+    OPENAI_API_KEY_EMBD:str = "sk-t6_GtfQguSfR1vwtJJD9GA"
 
     # --- Common model parameters ---
     MAX_TOKENS: int = 2048
