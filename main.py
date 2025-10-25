@@ -11,6 +11,10 @@ from utils.files import iter_zip_code_files
 from utils.language import guess_lang_from_name
 from utils.markdown import extract_code_block
 from domain.models import EXT_MAP
+from transformers import VitsModel, AutoTokenizer
+import torch
+import soundfile as sf
+import sounddevice as sd
 
 APP_TITLE = "Code Heroes"
 
@@ -144,6 +148,37 @@ if do_review_single:
 if st.session_state.last_review_md:
     st.subheader("📋 Kết quả Review (đoạn code dán)")
     st.markdown(st.session_state.last_review_md)
+
+    # Nút phát giọng nói qua Hugging Face
+    if st.button("🔊 Nghe kết quả review"):
+        try:
+            model = VitsModel.from_pretrained("hynt/F5-TTS-Vietnamese-ViVoice")  # loads the TTS model
+            tokenizer = AutoTokenizer.from_pretrained("hynt/F5-TTS-Vietnamese-ViVoice")  # loads text processor
+
+            st.info("🎧 Đang tạo và phát giọng nói... vui lòng chờ vài giây.")
+
+            # Prepare input text
+            print("🔹 Tokenizing input text...")
+            inputs = tokenizer(st.session_state.last_review_md,
+                               return_tensors="pt")  # convert text to model-readable format
+
+            # Run model inference
+            print("🔹 Generating speech waveform...")
+            with torch.no_grad():  # disable gradient calculation (saves memory)
+                outputs = model(**inputs)
+                waveform = outputs.waveform  # tensor representing the generated speech
+
+            # Save output audio
+            output_path = "output.wav"
+            sf.write(output_path, waveform.squeeze().cpu().numpy(), 16000)  # 16kHz sample rate
+            data, samplerate = sf.read('output.wav')
+            st.info("🎤 Đang phát giọng nói...")
+            sd.play(data, samplerate)
+            sd.wait()
+            st.success("✅ Đã đọc xong...")
+        except Exception as e:
+            st.error(f"Lỗi TTS: {e}")
+
     do_fix_single = st.button("🛠️ Fix code (đoạn code dán)", use_container_width=True)
     if do_fix_single:
         try:
