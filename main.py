@@ -105,8 +105,7 @@ if do_review:
 if st.session_state.last_review_md:
     st.subheader("📋 Kết quả Review")
     st.markdown(st.session_state.last_review_md)
-    auto_fix = st.checkbox("Tự động tạo bản đã sửa sau review", value=False)
-    do_fix = auto_fix or st.button("🛠️ Fix code", use_container_width=True)
+    do_fix = st.button("🛠️ Fix code", use_container_width=True)
 
     if do_fix:
         try:
