@@ -19,6 +19,7 @@ class CodeReviewService(CodeReviewPort):
         user = build_review_user_prompt(language, code, extra_note, output_language)
         logger.info("[Review] System prompt: " + sys)
         logger.info("[Review] User prompt: " + user)
+        logger.info("[Review] Extra note: " + extra_note)
         return self.client.chat_completion(
             model=model or self.default_model or "gpt-4o-mini",
             messages=[

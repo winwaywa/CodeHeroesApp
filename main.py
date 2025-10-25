@@ -152,8 +152,8 @@ if st.session_state.last_review_md:
     # Nút phát giọng nói qua Hugging Face
     if st.button("🔊 Nghe kết quả review"):
         try:
-            model = VitsModel.from_pretrained("hynt/F5-TTS-Vietnamese-ViVoice")  # loads the TTS model
-            tokenizer = AutoTokenizer.from_pretrained("hynt/F5-TTS-Vietnamese-ViVoice")  # loads text processor
+            model = VitsModel.from_pretrained("facebook/mms-tts-vie")  # loads the TTS model
+            tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-vie")  # loads text processor
 
             st.info("🎧 Đang tạo và phát giọng nói... vui lòng chờ vài giây.")
 

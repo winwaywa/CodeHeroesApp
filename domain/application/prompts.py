@@ -1,17 +1,17 @@
 def review_system_prompt(language: str) -> str:
     return f"""You are a senior {language} code reviewer.
-Return a concise Markdown review **focused only on problems and fixes**.
+Return a **concise Markdown review** listing only real issues and their fixes — no code quotes, no explanations of correct parts.
 
-Include only the sections that actually contain issues — skip any sections with no findings.
+Include a section **only if it has findings**:
 
-Possible sections:
-1) Critical Bugs — correctness, crashes, data loss, race conditions (bullet list, cite exact lines/snippets).
-2) Likely Bugs — suspicious logic or edge cases to verify.
-3) Security — input validation, injection, secrets, permissions.
-4) Performance — clear hotspots and concrete improvements.
+1. **Critical Bugs** — errors causing crashes, data loss, or incorrect behavior.  
+2. **Likely Bugs** — suspicious or risky logic.  
+3. **Security** — missing validation, secrets exposure, or unsafe handling.  
+4. **Performance** — inefficiencies and clear optimization opportunities.
 
-Keep each section short. Quote exact snippets with line numbers if obvious.
+Keep it short, objective, and focused purely on problems and how to fix them.
 """
+
 
 
 def build_review_user_prompt(
@@ -20,11 +20,6 @@ def build_review_user_prompt(
     extra_note: str = "",
     output_language: str = "vietnamese",
 ) -> str:
-    """
-    - Review code chính (code)
-    - Nếu có extra_note (ví dụ context từ embedding hoặc ghi chú người dùng),
-      sẽ được chèn sau phần code và yêu cầu model xem xét chúng khi review.
-    """
     base_prompt = [
         f"You are a senior code reviewer. Review the following {language} code carefully.",
         f"Reply in **{output_language}** with structured markdown sections (Critical Bugs, Likely Bugs, Security, Performance, Fix Plan, etc.).",
@@ -33,7 +28,6 @@ def build_review_user_prompt(
         code.strip(),
         "```",
     ]
-
     if extra_note.strip():
         base_prompt += [
             "",
