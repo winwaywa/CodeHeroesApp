@@ -20,10 +20,32 @@ def build_review_user_prompt(
     extra_note: str = "",
     output_language: str = "vietnamese",
 ) -> str:
-    return f"""Review the following {language} code and reply in **{output_language}**.
-```{language}
-{code}
-"""
+    """
+    - Review code chính (code)
+    - Nếu có extra_note (ví dụ context từ embedding hoặc ghi chú người dùng),
+      sẽ được chèn sau phần code và yêu cầu model xem xét chúng khi review.
+    """
+    base_prompt = [
+        f"You are a senior code reviewer. Review the following {language} code carefully.",
+        f"Reply in **{output_language}** with structured markdown sections (Critical Bugs, Likely Bugs, Security, Performance, Fix Plan, etc.).",
+        "",
+        f"```{language}",
+        code.strip(),
+        "```",
+    ]
+
+    if extra_note.strip():
+        base_prompt += [
+            "",
+            "---",
+            "### Additional Context / Notes",
+            extra_note.strip(),
+            "---",
+            "Consider this context when reviewing the code above.",
+        ]
+
+    return "\n".join(base_prompt)
+
 
 
 def fix_system_prompt(language: str) -> str:

@@ -4,8 +4,9 @@ import zipfile
 import streamlit as st
 
 from config.settings import settings
+from db.chroma import CHROMA_COLLECTION, build_embedding_fn, get_collection
+from db.utils import index_codebase_in_chroma, build_context_md, retrieve_related_code
 from infra.factories.code_review_factory import build_code_review_service
-from utils.decoding import safe_decode
 from utils.files import iter_zip_code_files
 from utils.language import guess_lang_from_name
 from utils.markdown import extract_code_block
@@ -48,7 +49,6 @@ with st.sidebar:
         ],
         index=0
     )
-    note = st.text_area("Ghi chú review (tuỳ chọn)")
 
 # ---------------------------
 # Tabs
@@ -132,7 +132,7 @@ if do_review_single:
             st.write("Provider:", provider)
             st.write("Model / Deployment:", model)
             st.write("Language:", active_lang)
-            review_md = service.review(language=active_lang, code=active_code, extra_note=note)
+            review_md = service.review(language=active_lang, code=active_code)
             status.update(label="✅ Review xong", state="complete")
         st.session_state.last_code = active_code
         st.session_state.last_lang = active_lang
@@ -184,13 +184,32 @@ with c2:
 if do_review_batch:
     try:
         st.session_state.last_batch_results = []
+
+        # Khởi tạo embedding_fn + collection
+        emb_fn = build_embedding_fn()
+        collection = get_collection(CHROMA_COLLECTION, emb_fn)
+
+        with st.status("Đang index vào ChromaDB…", expanded=True) as s1:
+            index_codebase_in_chroma(collection, batch_inputs)
+            s1.update(label="✅ Đã index toàn bộ source vào ChromaDB", state="complete")
+
         with st.status("Đang review folder…", expanded=True) as status:
             st.write("Tổng số file:", len(batch_inputs))
             for item in batch_inputs:
+                # Lấy context liên quan từ vector DB
+                related = retrieve_related_code(
+                    collection=collection,
+                    query_text=item["code"],        # truy vấn bằng chính nội dung file
+                    exclude_path=item["name"],
+                    k=5
+                )
+                context_md = build_context_md(related)
+
+                # Thực hiện call review service
                 review_md = service.review(
                     language=item["lang"] or default_lang,
                     code=item["code"],
-                    extra_note=note
+                    extra_note=context_md.strip() # context truy vấn được
                 )
                 st.session_state.last_batch_results.append({
                     "name": item["name"],
