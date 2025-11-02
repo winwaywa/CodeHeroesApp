@@ -65,6 +65,13 @@ def render_sidebar():
                 value=settings.AZURE_OPENAI_DEPLOYMENT,
             )
 
+        with st.expander("ℹ️ Notes"):
+            st.markdown(
+                """
+                - App **không lưu** API key hay source code; mọi thứ ở trong **phiên làm việc hiện tại**.
+                """
+            )
+
     return {
         "provider": provider,
         "api_key": api_key,
@@ -158,18 +165,6 @@ def handle_review_and_fix(service, provider, model, active_code, active_lang):
         )
 
 
-def render_notes():
-    st.divider()
-    with st.expander("ℹ️ Notes"):
-        st.markdown(
-            """
-            - App hiện chỉ hỗ trợ dán trực tiếp nội dung code (text).
-            - Với đoạn code dài, cân nhắc chia nhỏ để tránh giới hạn token hoặc rate-limit.
-            - App **không lưu** API key hay source code; mọi thứ ở trong **phiên làm việc hiện tại**.
-            """
-        )
-
-
 def main():
     init_page()
     sidebar_state = render_sidebar()
@@ -188,8 +183,6 @@ def main():
         active_code,
         active_lang,
     )
-
-    render_notes()
 
 
 if __name__ == "__main__":
