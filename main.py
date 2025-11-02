@@ -5,16 +5,11 @@ from infra.factories.code_review_factory import build_code_review_service
 from utils.language import guess_lang_from_code
 from utils.markdown import extract_code_block
 from domain.models import EXT_MAP
-from transformers import VitsModel, AutoTokenizer
-import torch
-import soundfile as sf
-import sounddevice as sd
 
 APP_TITLE = "Code Heroes"
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🛠️", layout="wide")
 st.title("🛠️" + APP_TITLE)
-st.caption("Dán code và nhận gợi ý review → fix.")
 
 # ---------------------------
 # Sidebar - Provider settings
@@ -39,7 +34,7 @@ with st.sidebar:
                               placeholder="vd: gpt-4o-mini-deploy",
                               value=settings.AZURE_OPENAI_DEPLOYMENT)
 
-code_text = st.text_area("Dán code", height=280, placeholder="Paste your code…")
+code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
 language_options = [
     "(Chọn ngôn ngữ)",
     "python", "javascript", "typescript", "java", "csharp", "cpp", "go", "rust",
@@ -59,7 +54,7 @@ if st.session_state.get("paste_lang_auto", True):
     st.session_state.paste_lang_value = detected_lang or unknown_label
 
 paste_lang = st.selectbox(
-    "Ngôn ngữ (nếu dán)",
+    "Ngôn ngữ",
     language_options,
     key="paste_lang_value"
 )
@@ -99,7 +94,7 @@ else:
     )
 
 # ---------------------------
-# PASTE actions (đơn lẻ)
+# PASTE actions
 # ---------------------------
 active_code = ""
 active_lang = selected_lang or "text"
@@ -107,11 +102,11 @@ if code_text.strip():
     active_code = code_text
     active_lang = selected_lang or "text"
 
-do_review_single = st.button("🔍 Review (đoạn code dán)", use_container_width=True, disabled=(not active_code))
+do_review = st.button("🔍 Review", use_container_width=True, disabled=(not active_code))
 
-if do_review_single:
+if do_review:
     try:
-        with st.status("Đang review (single)…", expanded=True) as status:
+        with st.status("Đang review …", expanded=True) as status:
             st.write("Provider:", provider)
             st.write("Model / Deployment:", model)
             st.write("Language:", active_lang)
@@ -125,41 +120,11 @@ if do_review_single:
         st.exception(e)
 
 if st.session_state.last_review_md:
-    st.subheader("📋 Kết quả Review (đoạn code dán)")
+    st.subheader("📋 Kết quả Review")
     st.markdown(st.session_state.last_review_md)
 
-    # Nút phát giọng nói qua Hugging Face
-    if st.button("🔊 Nghe kết quả review"):
-        try:
-            model = VitsModel.from_pretrained("facebook/mms-tts-vie")  # loads the TTS model
-            tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-vie")  # loads text processor
-
-            st.info("🎧 Đang tạo và phát giọng nói... vui lòng chờ vài giây.")
-
-            # Prepare input text
-            print("🔹 Tokenizing input text...")
-            inputs = tokenizer(st.session_state.last_review_md,
-                               return_tensors="pt")  # convert text to model-readable format
-
-            # Run model inference
-            print("🔹 Generating speech waveform...")
-            with torch.no_grad():  # disable gradient calculation (saves memory)
-                outputs = model(**inputs)
-                waveform = outputs.waveform  # tensor representing the generated speech
-
-            # Save output audio
-            output_path = "output.wav"
-            sf.write(output_path, waveform.squeeze().cpu().numpy(), 16000)  # 16kHz sample rate
-            data, samplerate = sf.read('output.wav')
-            st.info("🎤 Đang phát giọng nói...")
-            sd.play(data, samplerate)
-            sd.wait()
-            st.success("✅ Đã đọc xong...")
-        except Exception as e:
-            st.error(f"Lỗi TTS: {e}")
-
-    do_fix_single = st.button("🛠️ Fix code (đoạn code dán)", use_container_width=True)
-    if do_fix_single:
+    do_fix = st.button("🛠️ Fix code", use_container_width=True)
+    if do_fix:
         try:
             with st.status("Đang tạo bản sửa…", expanded=True) as status:
                 fixed_md = service.fix(
@@ -195,6 +160,5 @@ with st.expander("ℹ️ Notes"):
         - App hiện chỉ hỗ trợ dán trực tiếp nội dung code (text).
         - Với đoạn code dài, cân nhắc chia nhỏ để tránh giới hạn token hoặc rate-limit.
         - App **không lưu** API key hay source code; mọi thứ ở trong **phiên làm việc hiện tại**.
-        - Quy chuẩn (PEP8/OWASP/PSR/MISRA…) hãy ghi rõ tại ô ghi chú.
         """
     )
