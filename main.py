@@ -45,14 +45,36 @@ SESSION_DEFAULTS = {
     "last_lang": "text",
     "last_review_md": "",
     "fixed_code_block": "",
+    "draft_code_input": "",
+    "draft_language_input": "text",
     LANGUAGE_SELECT_KEY: UNKNOWN_LANGUAGE_LABEL,
     LANGUAGE_AUTO_KEY: True,
 }
+REVIEW_TOOL_TRIGGER = "/review"
+FIX_TOOL_TRIGGER = "/fix"
 
 ChatEntry = Dict[str, str]
 ChatHistory = List[ChatEntry]
 
-DEFAULT_CHAT_GREETING: ChatEntry = {"role": "assistant", "content": "Hỏi tôi về kết quả review nhé! 👇"}
+@dataclass(frozen=True)
+class ChatTool:
+    command: str
+    description: str
+
+
+CHAT_TOOLS: Tuple[ChatTool, ...] = (
+    ChatTool(REVIEW_TOOL_TRIGGER, "Chạy review cho đoạn code ở panel chính."),
+    ChatTool(FIX_TOOL_TRIGGER, "Sinh bản sửa dựa trên review gần nhất."),
+)
+
+TOOL_HINT = " | ".join(f"`{tool.command}`: {tool.description}" for tool in CHAT_TOOLS)
+
+DEFAULT_CHAT_GREETING: ChatEntry = {
+    "role": "assistant",
+    "content": (
+        f"Xin chào! {TOOL_HINT}. Sau đó bạn có thể hỏi thêm các câu hỏi về kết quả."
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -139,8 +161,14 @@ def get_chat_history() -> ChatHistory:
     return st.session_state.setdefault("chat_messages", new_chat_history())
 
 
-def reset_chat_history() -> None:
-    st.session_state.chat_messages = new_chat_history()
+# --- Utility helpers ---
+
+
+def trigger_rerun() -> None:
+    rerun = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
+    if rerun is None:  # pragma: no cover - defensive branch
+        raise AttributeError("Streamlit không hỗ trợ rerun trong phiên bản hiện tại.")
+    rerun()
 
 
 # --- Sidebar UI ---
@@ -269,50 +297,72 @@ def perform_fix(service, state: ReviewState) -> Optional[str]:
     return (fixed_code or fixed_md).strip()
 
 
-def render_fixed_code_section(state: ReviewState) -> None:
-    st.subheader("✅ Code đã Fix ")
-    st.code(state.fixed_code, language=state.language or "text")
-    download_name = "fixed_code" + EXT_MAP.get(state.language, ".txt")
-    st.download_button(
-        "⬇️ Tải code đã fix",
-        data=state.fixed_code.encode("utf-8"),
-        file_name=download_name,
-        mime="text/plain",
-        use_container_width=True,
-    )
+def render_review_results(state: ReviewState) -> None:
+    if not state.has_review:
+        return
 
-
-def render_review_section(service, state: ReviewState) -> ReviewState:
     st.subheader("📋 Kết quả Review")
     st.markdown(state.review_md)
 
-    fix_clicked = st.button("🛠️ Fix code", use_container_width=True)
-    if fix_clicked:
-        fixed_code = perform_fix(service, state)
-        if fixed_code:
-            state = state.with_fixed_code(fixed_code)
-            state.persist()
+    if not state.has_fixed_code:
+        st.caption(f"Gõ `{FIX_TOOL_TRIGGER}` trong chatbot để tạo bản sửa.")
 
     if state.has_fixed_code:
-        render_fixed_code_section(state)
+        st.subheader("✅ Code đã Fix ")
+        st.code(state.fixed_code, language=state.language or "text")
+        download_name = "fixed_code" + EXT_MAP.get(state.language, ".txt")
+        st.download_button(
+            "⬇️ Tải code đã fix",
+            data=state.fixed_code.encode("utf-8"),
+            file_name=download_name,
+            mime="text/plain",
+            use_container_width=True,
+        )
 
-    return state
 
+def handle_tool_invocation(
+    prompt: str,
+    service,
+    cfg: SidebarConfig,
+    review_state: ReviewState,
+) -> Tuple[bool, ReviewState, str]:
+    command = prompt.strip().split()[0].lower()
+    if command == REVIEW_TOOL_TRIGGER:
+        code_text = st.session_state.get("draft_code_input", "")
+        language = st.session_state.get("draft_language_input", "text")
+        inputs = ReviewInputs(code_text=code_text, language=language or "text")
+        if not inputs.has_code:
+            return True, review_state, "⚠️ Không tìm thấy code để review. Hãy dán code vào ô bên trái nhé!"
 
-def handle_review_and_fix(service, cfg: SidebarConfig, inputs: ReviewInputs, state: ReviewState) -> ReviewState:
-    review_clicked = st.button("🔍 Review", use_container_width=True, disabled=not inputs.has_code)
-
-    if review_clicked:
         review_md = perform_review(service, cfg, inputs)
-        if review_md:
-            state = state.with_review(code=inputs.active_code, language=inputs.language, review_md=review_md)
-            state.persist()
-            reset_chat_history()
+        if not review_md:
+            return True, review_state, "❌ Review không thành công. Kiểm tra lại cấu hình và thử lại."
 
-    if state.has_review:
-        state = render_review_section(service, state)
+        new_state = review_state.with_review(
+            code=inputs.active_code,
+            language=inputs.language,
+            review_md=review_md,
+        )
+        new_state.persist()
+        return True, new_state, "✅ Đã review code. Bạn có thể xem kết quả và tải bản báo cáo ở panel chính."
 
-    return state
+    if command == FIX_TOOL_TRIGGER:
+        if not review_state.has_review:
+            return (
+                True,
+                review_state,
+                f"⚠️ Chưa có kết quả review. Hãy chạy `{REVIEW_TOOL_TRIGGER}` trước khi yêu cầu fix.",
+            )
+
+        fixed_code = perform_fix(service, review_state)
+        if not fixed_code:
+            return True, review_state, "❌ Không tạo được bản sửa. Thử lại sau hoặc kiểm tra cấu hình."
+
+        new_state = review_state.with_fixed_code(fixed_code)
+        new_state.persist()
+        return True, new_state, "✅ Đã tạo bản sửa. Xem panel chính để copy hoặc tải file."
+
+    return False, review_state, ""
 
 
 # --- Layout helpers ---
@@ -324,18 +374,31 @@ def render_primary_panel(
     state: ReviewState,
 ) -> Tuple[ReviewState, str]:
     code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
+    st.session_state.draft_code_input = code_text
+
     language = pick_language(code_text) or "text"
-    inputs = ReviewInputs(code_text=code_text, language=language)
+    st.session_state.draft_language_input = language
 
-    updated_state = handle_review_and_fix(review_service, sidebar_cfg, inputs, state)
+    render_review_results(state)
 
-    return updated_state, updated_state.language or inputs.language
+    if not state.has_review:
+        st.caption(f"Sử dụng chatbot với lệnh `{REVIEW_TOOL_TRIGGER}` để chạy đánh giá code.")
+
+    active_language = state.language if state.has_review else language
+
+    return state, active_language
 
 
 # --- Chatbot helpers ---
 
 
-def request_chatbot_reply(service, model: str, review_state: ReviewState, fallback_language: str, question: str) -> str:
+def request_chatbot_reply(
+    service,
+    cfg: SidebarConfig,
+    review_state: ReviewState,
+    fallback_language: str,
+    question: str,
+) -> str:
     client = getattr(service, "client", None)
     chat_history = get_chat_history()
     language_context = review_state.language or fallback_language or "text"
@@ -346,7 +409,9 @@ def request_chatbot_reply(service, model: str, review_state: ReviewState, fallba
         ChatMessage(
             "system",
             "Bạn là trợ lý review code. Giữ câu trả lời ngắn gọn, tập trung vào vấn đề kỹ thuật, "
-            "và trả lời bằng tiếng Việt. Nếu người dùng hỏi ngoài phạm vi code review, hãy nhẹ nhàng hướng họ quay lại.",
+            "và trả lời bằng tiếng Việt. Nếu người dùng hỏi ngoài phạm vi code review, hãy nhẹ nhàng hướng họ quay lại. "
+            f"Nhắc người dùng rằng họ có thể dùng `{REVIEW_TOOL_TRIGGER}` để chạy đánh giá code "
+            f"và `{FIX_TOOL_TRIGGER}` để tạo bản sửa.",
         ),
         ChatMessage(
             "system",
@@ -363,7 +428,7 @@ def request_chatbot_reply(service, model: str, review_state: ReviewState, fallba
 
     try:
         return client.chat_completion(
-            model=model,
+            model=cfg.model,
             messages=payload,
             temperature=0.3,
         )
@@ -374,11 +439,16 @@ def request_chatbot_reply(service, model: str, review_state: ReviewState, fallba
         )
 
 
-def render_chatbot_panel(service, model: str, active_lang: str, review_state: ReviewState) -> None:
+def render_chatbot_panel(
+    service,
+    cfg: SidebarConfig,
+    active_lang: str,
+    review_state: ReviewState,
+) -> ReviewState:
     prompt = st.chat_input("Đặt câu hỏi tiếp theo…", key="chatbot_prompt")
     chat_history = get_chat_history()
 
-    messages_container = st.container(height=500, border=True)
+    messages_container = st.container(height=420, border=True)
     with messages_container:
         for message in chat_history:
             role = message["role"]
@@ -390,11 +460,26 @@ def render_chatbot_panel(service, model: str, active_lang: str, review_state: Re
             with st.chat_message("user"):
                 st.markdown(prompt)
 
+            handled, updated_state, tool_reply = handle_tool_invocation(
+                prompt,
+                service=service,
+                cfg=cfg,
+                review_state=review_state,
+            )
+            review_state = updated_state
+
+            if handled:
+                with st.chat_message("assistant"):
+                    st.markdown(tool_reply)
+                chat_history.append({"role": "assistant", "content": tool_reply})
+                st.session_state.chat_messages = chat_history
+                trigger_rerun()
+
             with st.chat_message("assistant"):
                 with st.spinner("Đang soạn câu trả lời…"):
                     reply = request_chatbot_reply(
                         service,
-                        model=model,
+                        cfg=cfg,
                         review_state=review_state,
                         fallback_language=active_lang,
                         question=prompt,
@@ -402,6 +487,7 @@ def render_chatbot_panel(service, model: str, active_lang: str, review_state: Re
                 st.markdown(reply)
             chat_history.append({"role": "assistant", "content": reply})
 
+    return review_state
 
 # --- Entry point ---
 
@@ -416,9 +502,9 @@ def main():
     review_state, active_chat_language = render_primary_panel(review_service, sidebar_cfg, review_state)
 
     with chat_container:
-        render_chatbot_panel(
+        review_state = render_chatbot_panel(
             review_service,
-            sidebar_cfg.model,
+            sidebar_cfg,
             active_lang=active_chat_language,
             review_state=review_state,
         )
