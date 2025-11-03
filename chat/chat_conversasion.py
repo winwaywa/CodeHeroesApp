@@ -118,17 +118,16 @@ class ChatConversation:
     def reply(
         self,
         *,
-        question: str,
-        model: str,
-        chat_history: List[Dict[str, str]],
-        code: str,
-        language: str,
+        question: str
     ) -> Tuple[str, SessionState, bool]:
         """
         Trả về: (assistant_reply, new_state, did_handle_tool)
         """
         state = self.state_store.get()
-        self.state_store.set(state)
+        model = state.model
+        chat_history = state.chat_messages
+        code = state.code
+        language = state.language
 
         snippet_panel = (code or "").strip()
         snippet_fixed = (state.fixed_code or "").strip()

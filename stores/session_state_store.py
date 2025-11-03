@@ -12,6 +12,7 @@ SESSION_KEYS = {
     "review_md": "review_md",
     "fixed_code": "fixed_code",
     "chat_messages": "chat_messages",
+    "model": "model",
 }
 
 @dataclass
@@ -21,6 +22,7 @@ class SessionState:
     review_md: str = ""
     fixed_code: str = ""
     chat_messages: List[Dict[str, str]] = field(default_factory=list)
+    model: str = ""  
 
     @property
     def has_review(self) -> bool:
@@ -34,6 +36,7 @@ class SessionStateStore:
             review_md=st.session_state.get(SESSION_KEYS["review_md"], ""),
             fixed_code=st.session_state.get(SESSION_KEYS["fixed_code"], ""),
             chat_messages=st.session_state.get(SESSION_KEYS["chat_messages"], []),
+            model=st.session_state.get(SESSION_KEYS["model"], ""),
         )
 
     def set(self, state: SessionState) -> None:
@@ -42,3 +45,4 @@ class SessionStateStore:
         st.session_state[SESSION_KEYS["review_md"]] = state.review_md
         st.session_state[SESSION_KEYS["fixed_code"]] = state.fixed_code
         st.session_state[SESSION_KEYS["chat_messages"]] = state.chat_messages
+        st.session_state[SESSION_KEYS["model"]] = state.model

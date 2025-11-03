@@ -58,6 +58,10 @@ store = SessionStateStore()
 chatbot = ChatConversation(client=client, state_store=store)
 state: SessionState = store.get()
 
+# set model in state
+state.model = model  
+store.set(state)
+
 # ============== Panel (code) ==============
 code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
 
@@ -125,11 +129,7 @@ with chat_tab:
             with st.chat_message("assistant"):
                 with st.spinner("Đang soạn câu trả lời…"):
                     reply, new_state, handled_tool = chatbot.reply(
-                        question=prompt,
-                        model=model,
-                        chat_history=state.chat_messages,
-                        code=state.code,
-                        language=state.language,
+                        question=prompt
                     )
                 st.markdown(reply)
 
