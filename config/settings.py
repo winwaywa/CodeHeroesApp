@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # --- Provider ---
-    PROVIDER: str = "OpenAI"  # hoặc "AzureOpenAI"
+    PROVIDER: str = "AzureOpenAI"  # hoặc "OpenAI"
 
     # --- OpenAI ---
     OPENAI_API_KEY: str = ""
