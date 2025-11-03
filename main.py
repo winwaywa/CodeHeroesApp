@@ -4,35 +4,21 @@ import streamlit as st
 
 from chat.llm.azure_client import AzureOpenAIChatClient
 from chat.llm.openai_client import OpenAIChatClient
+from config.constant import APP_TITLE, EXT_MAP, LANGUAGE_OPTIONS, OPENAI_MODELS, PROVIDER_OPTIONS
 from config.settings import settings
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.language import guess_lang_from_code
 from chat.chat_conversasion import ChatConversation
 
-APP_TITLE = "Code Heroes"
-
-EXT_MAP: Dict[str, str] = {
-    "python": ".py", "javascript": ".js", "typescript": ".ts", "java": ".java",
-    "csharp": ".cs", "cpp": ".cpp", "go": ".go", "rust": ".rs", "php": ".php",
-    "ruby": ".rb", "swift": ".swift", "kotlin": ".kt", "bash": ".sh", "sql": ".sql",
-    "html": ".html", "css": ".css", "json": ".json", "yaml": ".yml", "text": ".txt",
-}
-LANGUAGE_OPTIONS = [
-    "(Chọn ngôn ngữ)", "python", "javascript", "typescript", "java", "csharp", "cpp",
-    "go", "rust", "php", "ruby", "swift", "kotlin", "bash", "sql", "html", "css", "json",
-    "yaml", "text"
-]
-OPENAI_MODELS = ["gpt-4o-mini", "gpt-4.1-mini", "o4-mini"]
-PROVIDER_OPTIONS = ["OpenAI", "Azure OpenAI"]
-
 # ============== Page & header ==============
 st.set_page_config(page_title=APP_TITLE, page_icon="🛠️", layout="wide")
 st.title("🛠️" + APP_TITLE)
-st.caption("Dán code và trò chuyện để review → fix (tự nhiên).")
+st.caption("Dán code của bạn để có thể thực hiện trò chuyện.")
 
-# ============== Sidebar (UI) ==============
+# ============== Sidebar ==============
 with st.sidebar:
     settings_tab, chat_tab = st.tabs(["⚙️ Settings", "💬 Chatbot"])
+    # Settings tab
     with settings_tab:
         provider = st.selectbox("Provider", PROVIDER_OPTIONS, index=1)
         if provider == "OpenAI":
@@ -67,26 +53,41 @@ if provider == "Azure OpenAI":
 else:
     client = OpenAIChatClient(api_key=api_key or settings.OPENAI_API_KEY)
 
+# ============== Khởi tạo Store & ChatBot ==============
 store = SessionStateStore()
 chatbot = ChatConversation(client=client, state_store=store)
 state: SessionState = store.get()
 
 # ============== Panel (code) ==============
-code_text = st.text_area("Your code", height=280, placeholder="Paste your code…", value=state.code)
+code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
 
 # Cập nhật state.code khi nhập
 if code_text != state.code:
     state.code = code_text
     store.set(state)
 
-# Auto-detect language
+# Detect ngôn ngữ từ code
 stripped = (state.code or "").strip()
-detected_lang = guess_lang_from_code(stripped) if stripped else None
-if detected_lang in LANGUAGE_OPTIONS and detected_lang != state.language:
-    state.language = detected_lang
-    store.set(state)
+if stripped:
+    detected_lang = guess_lang_from_code(stripped)
+    if detected_lang:
+        # Tự động nhận diện
+        if detected_lang != state.language:
+            state.language = detected_lang
+            store.set(state)
+        st.success(f"Đã tự động phát hiện ngôn ngữ: **{detected_lang}**", icon="🔍")
+    else:
+        # Không detect được -> yêu cầu chọn
+        st.warning("Không nhận diện được ngôn ngữ. Vui lòng chọn:", icon="⚠️")
+        selected_lang = st.selectbox(
+            "Chọn ngôn ngữ",
+            LANGUAGE_OPTIONS
+        )
+        if selected_lang != state.language:
+            state.language = selected_lang
+            store.set(state)
 
-# fixed code output (panel)
+# fixed code output
 if (state.fixed_code or "").strip():
     st.subheader("✅ Code đã Fix")
     st.code(state.fixed_code, language=state.language or "text")
@@ -105,7 +106,7 @@ else:
 with chat_tab:
     if not (state.code or "").strip():
         st.info("⚠️ Hãy nhập code script mới có thể trò chuyện.")
-    prompt = st.chat_input("Nhập câu hỏi / yêu cầu review / fix…", disabled=not state.code.strip())
+    prompt = st.chat_input("Nhập câu hỏi / yêu cầu review / fix…", disabled=not (state.code or "").strip())
 
     chat_container = st.container(height=420, border=True)
     with chat_container:
