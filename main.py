@@ -66,12 +66,13 @@ store.set(state)
 code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
 
 # Cập nhật state.code khi nhập
-if code_text != state.code:
-    state.code = code_text
+if code_text != state.origin_code:
+    state.fixed_code = ""  # reset fixed code khi đổi code gốc
+    state.origin_code = code_text
     store.set(state)
 
 # Detect ngôn ngữ từ code
-stripped = (state.code or "").strip()
+stripped = (state.origin_code or "").strip()
 if stripped:
     detected_lang = guess_lang_from_code(stripped)
     if detected_lang:
@@ -108,9 +109,9 @@ else:
 
 # ============== Chat (Sidebar) ==============
 with chat_tab:
-    if not (state.code or "").strip():
-        st.info("⚠️ Hãy nhập code script mới có thể trò chuyện.")
-    prompt = st.chat_input("Nhập câu hỏi / yêu cầu review / fix…", disabled=not (state.code or "").strip())
+    if not (state.origin_code or "").strip():
+        st.warning("Hãy nhập code script mới có thể trò chuyện.", icon="⚠️")
+    prompt = st.chat_input("Nhập câu hỏi / yêu cầu review / fix…", disabled=not (state.origin_code or "").strip())
 
     chat_container = st.container(height=420, border=True)
     with chat_container:
@@ -128,14 +129,12 @@ with chat_tab:
             # Gọi chatbot
             with st.chat_message("assistant"):
                 with st.spinner("Đang soạn câu trả lời…"):
-                    reply, new_state, handled_tool = chatbot.reply(
-                        question=prompt
-                    )
+                    reply, new_state, used_tool = chatbot.reply(question=prompt)
                 st.markdown(reply)
 
             # Cập nhật message & state
             new_state.chat_messages.append({"role": "assistant", "content": reply})
             store.set(new_state)
 
-            if handled_tool:
+            if used_tool:
                 st.rerun()

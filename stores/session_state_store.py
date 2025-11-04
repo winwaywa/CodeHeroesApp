@@ -7,9 +7,8 @@ from git import List
 
 
 SESSION_KEYS = {
-    "code": "code",
+    "origin_code": "origin_code",
     "language": "language",
-    "review_md": "review_md",
     "fixed_code": "fixed_code",
     "chat_messages": "chat_messages",
     "model": "model",
@@ -17,32 +16,26 @@ SESSION_KEYS = {
 
 @dataclass
 class SessionState:
-    code: str = ""
+    origin_code: str = ""
     language: str = "text"
-    review_md: str = ""
     fixed_code: str = ""
     chat_messages: List[Dict[str, str]] = field(default_factory=list)
     model: str = ""  
 
-    @property
-    def has_review(self) -> bool:
-        return bool(self.review_md.strip())
     
 class SessionStateStore:
     def get(self) -> SessionState:
         return SessionState(
-            code=st.session_state.get(SESSION_KEYS["code"], ""),
+            origin_code=st.session_state.get(SESSION_KEYS["origin_code"], ""),
             language=st.session_state.get(SESSION_KEYS["language"], "text"),
-            review_md=st.session_state.get(SESSION_KEYS["review_md"], ""),
             fixed_code=st.session_state.get(SESSION_KEYS["fixed_code"], ""),
             chat_messages=st.session_state.get(SESSION_KEYS["chat_messages"], []),
             model=st.session_state.get(SESSION_KEYS["model"], ""),
         )
 
     def set(self, state: SessionState) -> None:
-        st.session_state[SESSION_KEYS["code"]] = state.code
+        st.session_state[SESSION_KEYS["origin_code"]] = state.origin_code
         st.session_state[SESSION_KEYS["language"]] = state.language
-        st.session_state[SESSION_KEYS["review_md"]] = state.review_md
         st.session_state[SESSION_KEYS["fixed_code"]] = state.fixed_code
         st.session_state[SESSION_KEYS["chat_messages"]] = state.chat_messages
         st.session_state[SESSION_KEYS["model"]] = state.model
