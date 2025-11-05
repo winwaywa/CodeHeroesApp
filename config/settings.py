@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # --- Common model parameters ---
     MAX_TOKENS: int = 2048
-    TEMPERATURE: float = 0.3
+    TEMPERATURE: float = 0
     TOP_P: float = 1.0
 
     class Config:

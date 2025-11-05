@@ -69,6 +69,7 @@ code_text = st.text_area("Your code", height=280, placeholder="Paste your code�
 # Cập nhật state.code khi nhập
 if code_text != state.origin_code:
     state.fixed_code = ""  # reset fixed code khi đổi code gốc
+    state.chat_messages = []  # reset chat messages khi đổi code gốc
     state.origin_code = code_text
     store.set(state)
 

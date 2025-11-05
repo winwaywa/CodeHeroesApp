@@ -10,15 +10,19 @@ SYSTEM_CHAT = (
 
 def build_fix_prompt(*, language: str, base_code: str, fix_instructions: str) -> Dict[str, str]:
     system = (
-        "Bạn là trợ lý chỉnh sửa code. Hãy trả về CHỈ MỘT code block nằm giữa cặp ``` duy nhất chứa phiên bản đã sửa, "
-        "KHÔNG kèm bất kỳ giải thích hay văn bản nào khác. Không được chèn code block thứ hai."
+        "Bạn là trợ lý chỉnh sửa code. "
+        "Hãy trả về CHỈ MỘT code block duy nhất nằm giữa cặp ``` ... ``` chứa phiên bản đã sửa. "
+        "KHÔNG viết thêm bất kỳ văn bản, tiêu đề, chú thích, giải thích hoặc kí tự thừa TRƯỚC hoặc SAU code block. "
+        "KHÔNG được chèn code block thứ hai. "
+        "Nếu không thể sửa (thiếu ngữ cảnh), hãy trả về đúng code hiện tại trong một code block duy nhất."
     )
     user = (
         f"Ngôn ngữ: {language}\n"
-        f"Yêu cầu fix: {fix_instructions}\n"
-        f"Code hiện tại: \n```\n{base_code}\n```"
+        f"Yêu cầu fix :\n{fix_instructions}\n"
+        f"Code hiện tại:\n```\n{base_code}\n```"
     )
     return {"system": system, "user": user}
+
 
 
 def build_summary_prompt(*, language: str, base_code: str, fixed_code: str) -> Dict[str, str]:

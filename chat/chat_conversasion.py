@@ -11,6 +11,7 @@ from utils.markdown import extract_code_block
 
 from chat.prompts import SYSTEM_CHAT
 from chat.prompts import build_fix_prompt, build_summary_prompt, build_system_context
+from utils.tokens import count_tokens_tiktoken
 
 def _safe_json_parse(s: Optional[str]) -> Dict[str, Any]:
     if not s:
@@ -34,6 +35,36 @@ def _format_chat_messages(msgs: List[ChatMessage]) -> str:
         lines.append(f"{i:02d}. [{role}] {content}")
     return "\n".join(lines)
 
+def _build_messages_with_budget(
+    *,
+    base_messages: List[ChatMessage],
+    chat_history: List[Dict[str, str]],
+    new_user_text: str,
+    model: str,
+    max_turns: int = 10,
+    max_tokens: int = 8000,
+) -> List[ChatMessage]:
+    """
+    Lấy tối đa max_turns lượt chat gần nhất + base_messages + user request mới nhất.
+    Nếu tổng token > max_tokens, ta giảm dần số lượt cho đến khi phù hợp.
+    """
+    # Chuẩn hóa lịch sử chat thành ChatMessage list
+    history_msgs = [ChatMessage(m["role"], m["content"]) for m in chat_history]
+
+    # Tin nhắn người dùng mới
+    new_user_msg = ChatMessage("user", new_user_text)
+
+    # Thử lấy từ 10 → 0 lượt gần nhất
+    for keep in range(max_turns, -1, -1):
+        trial_messages = base_messages + history_msgs[-keep:] + [new_user_msg]
+        token_count = count_tokens_tiktoken(trial_messages, model)
+        logger.info(f"[chat] Thử build messages với {keep} lượt gần nhất: {token_count} tokens")
+        if token_count <= max_tokens:
+            return trial_messages  # cùng model, đủ token → dùng ngay
+
+    # Quá giới hạn: chỉ dùng base + user
+    return base_messages + [new_user_msg]
+
 TOOLS = [
     {
         "type": "function",
@@ -44,9 +75,13 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "fix_instructions": {
-                        "type": "string",
-                        "description": "Hướng dẫn fix cụ thể user vừa nêu (ví dụ: PEP8, thêm type hints, chuyển async, tối ưu hiệu năng…).",
-                    }
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Các bước sửa cụ thể, mỗi phần tử là 1 chỉ thị ngắn, có thể bao gồm: "
+                            "bugfix cụ thể, thêm/thay đổi import, refactor, tối ưu hiệu năng, chuẩn hoá style, thêm type hints,…"
+                        ),
+                    },
                 },
                 "required": ["fix_instructions"],
             },
@@ -96,7 +131,7 @@ class ChatConversation:
             fixed_md = self.client.chat_completion(
                 model=model,
                 messages=messages,
-                temperature=0.2,
+                temperature=0.1,
             )
         except Exception as e:
             logger.exception(f"[chat] Lỗi LLM khi thực hiện fix code: {e}")
@@ -119,14 +154,19 @@ class ChatConversation:
 
     def _call_llm_with_tools(
         self,
-        *, model: str, base_messages: List[ChatMessage], chat_history: List[Dict[str, str]], user_text: str
+        *, model: str, base_messages: List[ChatMessage], chat_history: List[Dict[str, str]], question: str
     ) -> Dict[str, Any]:
         """ Gọi LLM với tool hỗ trợ, trả về raw response từ LLM. """
         logger.info("[chat] Gọi LLM với tool hỗ trợ")
 
-        messages = base_messages \
-            # + [ChatMessage(m["role"], m["content"]) for m in chat_history]
-        messages.append(ChatMessage("user", user_text))
+        messages = _build_messages_with_budget(
+            base_messages=base_messages,        # list[ChatMessage] (system + context)
+            chat_history=chat_history,      # list[dict] [{role, content}]
+            new_user_text=question,
+            model=model,                    # tên model đang dùng
+            max_turns=10,                   # tối đa 10 lượt gần nhất
+            max_tokens=8000,                # giới hạn model (8k, 16k, 128k...)
+        )
 
         logger.info(f"[chat] Messages llm có tool: \n{_format_chat_messages(messages)}")
 
@@ -160,7 +200,7 @@ class ChatConversation:
         # 1) Gọi LLM
         try:
             raw = self._call_llm_with_tools(
-                model=model, base_messages=base_msgs, chat_history=chat_history, user_text=question
+                model=model, base_messages=base_msgs, chat_history=chat_history, question=question
             )
         except Exception:
             logger.info("[chat] Không kết nối được model")
@@ -189,7 +229,15 @@ class ChatConversation:
                 return (fallback, state, False)
 
             base_code = (latest_fixed or origin_code or "").strip()
-            fix_instructions = (args.get("fix_instructions") or question or "").strip()
+            if not base_code:
+                return None, "⚠️ Chưa có code để sửa. Hãy dán code hoặc yêu cầu review trước."
+            
+            raw_ins = args.get("fix_instructions", question)  # ưu tiên tool args
+            if isinstance(raw_ins, (list, tuple)):
+                raw_ins = "\n".join(map(str, raw_ins))
+            elif not isinstance(raw_ins, str):
+                raw_ins = str(raw_ins or "")
+            fix_instructions = raw_ins.strip()
 
             fixed_code, reply_msg = self._exec_fix_on_current_code(
                 model=model, language=language, base_code=base_code, fix_instructions=fix_instructions

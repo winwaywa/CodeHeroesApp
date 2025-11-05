@@ -4,6 +4,7 @@ sqlmodel>=0.0.27
 pydantic_settings>=2.11.0
 chromadb>=1.2.1
 transformers>=4.57.1
-torch
-soundfile
-sounddevice
+# torch
+# soundfile
+# sounddevice
+tiktoken>=0.12.0
