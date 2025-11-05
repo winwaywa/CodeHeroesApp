@@ -1,15 +1,28 @@
-from typing import Optional, Tuple
+def extract_code_block(md: str) -> str:
+    """
+    Bỏ cặp ``` ngoài cùng trong chuỗi markdown, trả lại toàn bộ nội dung bên trong.
+    Giữ nguyên mọi thứ khác (kể cả ``` nằm trong code).
+    Nếu không hợp lệ (không có đủ hai dấu ```), trả về chuỗi gốc (strip).
+    """
+    if not md:
+        return ""
 
-def extract_code_block(markdown_text: str) -> Tuple[str, Optional[str]]:
-    if not markdown_text:
-        return "", None
-    start = markdown_text.find("```")
+    fence = "```"
+    start = md.find(fence)
     if start == -1:
-        return markdown_text.strip(), None
-    first_line_end = markdown_text.find("\n", start + 3)
-    fence_lang = markdown_text[start + 3:first_line_end].strip() if first_line_end != -1 else ""
-    end = markdown_text.find("```", first_line_end + 1 if first_line_end != -1 else start + 3)
-    if end == -1:
-        return markdown_text.strip(), None
-    code = markdown_text[first_line_end + 1:end] if first_line_end != -1 else ""
-    return code.strip(), (fence_lang or None)
+        return md.strip()
+
+    # Tìm dấu ``` cuối cùng
+    end = md.rfind(fence)
+    if end == start:
+        return md.strip()  # chỉ có 1 dấu, không hợp lệ
+
+    # Lấy nội dung giữa hai fence, bỏ lang nếu có trên dòng đầu
+    inner = md[start + len(fence): end].lstrip()
+
+    # Bỏ dòng lang (nếu có), giữ tất cả nội dung còn lại
+    if "\n" in inner:
+        _, rest = inner.split("\n", 1)
+        return rest.rstrip()
+    else:
+        return inner.strip()

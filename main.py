@@ -9,6 +9,7 @@ from config.settings import settings
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.language import guess_lang_from_code
 from chat.chat_conversasion import ChatConversation
+from config.logging import logger
 
 # ============== Page & header ==============
 st.set_page_config(page_title=APP_TITLE, page_icon="🛠️", layout="wide")
@@ -121,18 +122,20 @@ with chat_tab:
                 st.markdown(msg["content"])
 
         if prompt:
-            # Thêm user message
-            state.chat_messages.append({"role": "user", "content": prompt})
+            # user message
             with st.chat_message("user"):
                 st.markdown(prompt)
+                logger.info(f"User prompt: {prompt}")
 
             # Gọi chatbot
             with st.chat_message("assistant"):
                 with st.spinner("Đang soạn câu trả lời…"):
                     reply, new_state, used_tool = chatbot.reply(question=prompt)
                 st.markdown(reply)
+                logger.info(f"Chatbot reply:\n{reply}")
 
             # Cập nhật message & state
+            new_state.chat_messages.append({"role": "user", "content": prompt})
             new_state.chat_messages.append({"role": "assistant", "content": reply})
             store.set(new_state)
 

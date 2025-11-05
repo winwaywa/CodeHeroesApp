@@ -9,12 +9,30 @@ from config.logging import logger
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.markdown import extract_code_block
 
-SYSTEM_CHAT = (
-    "Bạn là trợ lý review/fix code. Trả lời ngắn gọn, rõ ràng, bằng tiếng Việt.\n"
-    "- Khi người dùng yêu cầu giải thích/đánh giá (review) code: trả lời trực tiếp dựa trên ngữ cảnh, KHÔNG dùng tool.\n"
-    "- Khi người dùng yêu cầu sửa/refactor/điều chỉnh code: hãy gọi function `run_fix` với tham số fix_instructions.\n"
-    "Fix phải áp dụng lên phiên bản code hiện tại (ưu tiên bản đã sửa gần nhất) và tôn trọng yêu cầu của người dùng.\n"
-)
+from chat.prompts import SYSTEM_CHAT
+from chat.prompts import build_fix_prompt, build_summary_prompt, build_system_context
+
+def _safe_json_parse(s: Optional[str]) -> Dict[str, Any]:
+    if not s:
+        return {}
+    try:
+        return json.loads(s)
+    except Exception as e:
+        logger.warning(f"[chat] Lỗi parse tool args: {e}")
+        return {}
+
+def _format_chat_messages(msgs: List[ChatMessage]) -> str:
+    """
+    Convert list ChatMessage thành string dễ đọc để log.
+    Mỗi message sẽ hiển thị ở dạng:
+    [role] nội dung
+    """
+    lines = []
+    for i, msg in enumerate(msgs, start=1):
+        role = msg.role
+        content = msg.content.strip() if msg.content else ""
+        lines.append(f"{i:02d}. [{role}] {content}")
+    return "\n".join(lines)
 
 TOOLS = [
     {
@@ -36,137 +54,82 @@ TOOLS = [
     },
 ]
 
-def _safe_json_parse(s: Optional[str]) -> Dict[str, Any]:
-    if not s:
-        return {}
-    try:
-        return json.loads(s)
-    except Exception as e:
-        logger.warning(f"[chat] JSON parse error on tool arguments: {e}; raw={s!r}")
-        return {}
-
 class ChatConversation:
-    """
-    Gom toàn bộ logic chat + run_fix vào đây.
-    """
     def __init__(self, *, client: ChatClient, state_store: SessionStateStore):
         self.client = client
         self.state_store = state_store
 
-    # Thêm helper: tóm tắt thay đổi giữa base_code và fixed_code (KHÔNG dùng regex)
     def _summarize_changes(
         self, *, model: str, language: str, base_code: str, fixed_code: str
     ) -> str:
-        """
-        Dùng LLM để so sánh base_code và fixed_code rồi liệt kê thay đổi.
-        Yêu cầu LLM trả về bullet ngắn gọn (không code block / không preamble).
-        """
-        system_sum = (
-            "Bạn là reviewer giàu kinh nghiệm. Hãy so sánh hai phiên bản code và "
-            "liệt kê thay đổi một cách ngắn gọn, bằng tiếng Việt, dùng gạch đầu dòng '- '. "
-            "KHÔNG chèn code block, KHÔNG mở đầu dài dòng. Tối đa 5 bullet."
-        )
-        user_sum = (
-            f"Ngôn ngữ: {language}\n"
-            f"--- ORIGINAL ---\n```\n{base_code}\n```\n"
-            f"--- FIXED ---\n```\n{fixed_code}\n```"
-        )
+        """ Gọi LLM để tóm tắt thay đổi giữa base_code và fixed_code. Trả về chuỗi tóm tắt. """
+        logger.info("[chat] Gọi LLM để tóm tắt thay đổi code")
+
+        prompt = build_summary_prompt(language=language, base_code=base_code, fixed_code=fixed_code)
+        messages = [ChatMessage("system", prompt["system"]), ChatMessage("user", prompt["user"])]
+        logger.info(f"[chat] Messages llm tóm tắt thay đổi: \n{_format_chat_messages(messages)}")
+
         try:
-            summary = self.client.chat_completion(
+            return (self.client.chat_completion(
                 model=model,
-                messages=[ChatMessage("system", system_sum), ChatMessage("user", user_sum)],
+                messages=[ChatMessage("system", prompt["system"]), ChatMessage("user", prompt["user"])],
                 temperature=0.1,
-            )
-            return (summary or "").strip()
+            ) or "").strip()
         except Exception as e:
-            logger.exception(f"[chat] _summarize_changes: LLM error: {e}")
+            logger.exception(f"[chat] Lỗi LLM khi tóm tắt thay đổi code: {e}")
             return ""
 
-
-    # Thực thi FIX trực tiếp (2-call: 1) lấy code đã fix, 2) tóm tắt thay đổi)
     def _exec_fix_on_current_code(
-        self, *,
-        model: str,
-        language: str,
-        base_code: str,
-        fix_instructions: str,
+        self, *, model: str, language: str, base_code: str, fix_instructions: str
     ) -> Tuple[Optional[str], str]:
-        """
-        Nhận dữ liệu từ bên ngoài, không gọi state_store.
-        Trả về:
-        - fixed_code: Optional[str]
-        - short_msg: str (nội dung động do LLM tóm tắt thay đổi)
-        """
-        logger.info("[chat] _exec_fix_on_current_code: start")
-        logger.debug(f"[chat] fix_instructions={fix_instructions!r}")
+        """ Thực hiện fix code hiện tại theo hướng dẫn, trả về (fixed_code, reply_message) """
+        logger.info("[chat] Gọi LLM để fix code")
 
-        bc = (base_code or "").strip()
-        if not bc:
-            logger.info("[chat] _exec_fix_on_current_code: no base code")
+        if not (base_code or "").strip():
             return None, "⚠️ Chưa có code để sửa. Hãy dán code hoặc yêu cầu review trước."
 
-        # Call 1: YÊU CẦU TRẢ VỀ CHỈ CODE (một code block, không kèm giải thích)
-        system_fix = (
-            "Bạn là trợ lý chỉnh sửa code. Hãy trả về CHỈ MỘT code block duy nhất chứa phiên bản đã sửa, "
-            "KHÔNG kèm bất kỳ giải thích hay văn bản nào khác. Không được chèn code block thứ hai."
-        )
-        user_fix = (
-            f"Ngôn ngữ: {language}\n"
-            f"Yêu cầu fix: {fix_instructions}\n"
-            f"--- CODE HIỆN TẠI ---\n```\n{bc}\n```"
-        )
+        prompt = build_fix_prompt(language=language, base_code=base_code.strip(), fix_instructions=fix_instructions.strip())
+        messages = [ChatMessage("system", prompt["system"]), ChatMessage("user", prompt["user"])]
+        logger.info(f"[chat] Messages llm fix code: \n{_format_chat_messages(messages)}")
 
         try:
             fixed_md = self.client.chat_completion(
                 model=model,
-                messages=[ChatMessage("system", system_fix), ChatMessage("user", user_fix)],
+                messages=messages,
                 temperature=0.2,
             )
         except Exception as e:
-            logger.exception(f"[chat] _exec_fix_on_current_code: LLM error (fix): {e}")
+            logger.exception(f"[chat] Lỗi LLM khi thực hiện fix code: {e}")
             return None, "Không thể kết nối model để chạy fix. Kiểm tra cấu hình Provider/API key."
 
-        # Lấy code từ code block (nếu model tuân thủ thì fixed_md chính là code block)
-        fixed_code, _ = extract_code_block(fixed_md)
-        final_code = (fixed_code or fixed_md or "").strip()
-
-        if not final_code:
-            logger.info("[chat] _exec_fix_on_current_code: empty fixed_code after LLM")
-            return None, (
-                "❌ Không tạo được bản sửa. Hãy mô tả rõ hơn yêu cầu fix "
-                "(ví dụ: 'theo PEP8, thêm type hints, giữ nguyên logic')."
-            )
-
-        # Call 2: Tạo summary động về thay đổi (KHÔNG dùng regex)
-        summary = self._summarize_changes(
-            model=model, language=language, base_code=bc, fixed_code=final_code
-        )
-
+        # Extract code đã fix
+        fixed_code = extract_code_block(fixed_md)
+        if not fixed_code:
+            return None, ("❌ Không tạo được bản sửa. Hãy mô tả rõ hơn yêu cầu fix "
+                          "(ví dụ: 'theo PEP8, thêm type hints, giữ nguyên logic').")
+        
+        # Tóm tắt thay đổi
+        summary = self._summarize_changes(model=model, language=language, base_code=base_code, fixed_code=fixed_code)
         if summary:
-            short_msg = "✅ Tôi đã fix:\n" + "\n".join(
-                f"- {line.lstrip('- ').strip()}" for line in summary.splitlines() if line.strip()
-            )
+            reply = "✅ Tôi đã thực hiện chỉnh sửa:\n" + "\n".join(f"- {line.lstrip('- ').strip()}" for line in summary.splitlines() if line.strip())
         else:
-            # Fallback khi LLM tóm tắt gặp lỗi
-            short_msg = "✅ Đã áp dụng yêu cầu fix và cập nhật bản sửa trong panel."
+            reply = "✅ Đã áp dụng yêu cầu chỉnh sửa và cập nhật bản sửa trong panel."
 
-        logger.info("[chat] _exec_fix_on_current_code: done, fixed_code generated + summary built")
-        logger.debug(f"[chat] _exec_fix_on_current_code: summary_preview={summary[:200]!r}")
-        return final_code, short_msg
+        return fixed_code, reply
 
-
-    # --- Gọi LLM (cho phép tool) ---
     def _call_llm_with_tools(
         self,
-        *,
-        model: str,
-        base_messages: List[ChatMessage],
-        chat_history: List[Dict[str, str]],
-        user_text: str,
+        *, model: str, base_messages: List[ChatMessage], chat_history: List[Dict[str, str]], user_text: str
     ) -> Dict[str, Any]:
-        messages = base_messages + [ChatMessage(m["role"], m["content"]) for m in chat_history]
+        """ Gọi LLM với tool hỗ trợ, trả về raw response từ LLM. """
+        logger.info("[chat] Gọi LLM với tool hỗ trợ")
+
+        messages = base_messages \
+            # + [ChatMessage(m["role"], m["content"]) for m in chat_history]
         messages.append(ChatMessage("user", user_text))
-        logger.info("[chat] _call_llm_with_tools: sending to LLM")
+
+        logger.info(f"[chat] Messages llm có tool: \n{_format_chat_messages(messages)}")
+
         try:
             raw = self.client.chat_completion(
                 model=model,
@@ -176,21 +139,12 @@ class ChatConversation:
                 return_raw=True,
             )
         except Exception as e:
-            logger.exception(f"[chat] _call_llm_with_tools: LLM error: {e}")
+            logger.exception(f"[chat] Lỗi gọi LLM chatbot: {e}")
             raise
         return raw or {}
 
-    # --- API chính cho UI ---
-    def reply(
-        self,
-        *,
-        question: str
-    ) -> Tuple[str, SessionState, bool]:
-        """
-        Trả:
-          - message_to_user: str
-          - used_tool: bool
-        """
+    # --- API chính ---
+    def reply(self, *, question: str) -> Tuple[str, SessionState, bool]:
         state = self.state_store.get()
 
         model = state.model
@@ -199,90 +153,55 @@ class ChatConversation:
         language = state.language or "text"
         latest_fixed = (state.fixed_code or "").strip()
 
-        logger.info("[chat] reply: start")
-        logger.info(
-            "Chatbot Input:\n"
-            f"  Question: {question}\n"
-            f"  Model: {model}\n"
-            f"  Language: {language}\n"
-            f"  Code present: {bool(origin_code)}\n"
-            f"  Fixed Code present: {bool(latest_fixed)}\n"
-            f"  Chat History Length: {len(chat_history)}"
-        )
+        # System context + system chat
+        system_context = build_system_context(origin_code=origin_code, latest_fixed=latest_fixed, language=language)
+        base_msgs = [ChatMessage("system", SYSTEM_CHAT), ChatMessage("system", system_context)]
 
-        # System context an toàn (đóng code fence đầy đủ)
-        system_context = (
-            f"Source gốc người dùng nhập vào:\n```\n{origin_code}\n```\n"
-            f"Ngôn ngữ: {language}\n"
-        )
-        if latest_fixed:
-            system_context += f"Phiên bản code đã fix gần nhất:\n```\n{latest_fixed}\n```\n"
-
-        base_msgs = [
-            ChatMessage("system", SYSTEM_CHAT),
-            ChatMessage("system", system_context),
-        ]
-
-        # 1) Gọi LLM cho phép quyết định dùng tool hay trả lời trực tiếp
+        # 1) Gọi LLM
         try:
             raw = self._call_llm_with_tools(
-                model=model,
-                base_messages=base_msgs,
-                chat_history=chat_history,
-                user_text=question,
+                model=model, base_messages=base_msgs, chat_history=chat_history, user_text=question
             )
         except Exception:
-            logger.info("[chat] reply: LLM not reachable")
+            logger.info("[chat] Không kết nối được model")
             return ("Không thể kết nối model. Kiểm tra cấu hình Provider/API key.", state, False)
 
         choices = raw.get("choices") or []
         if not choices:
-            logger.info("[chat] reply: empty choices from LLM")
+            logger.info("[chat] LLM không trả về lựa chọn")
             return ("Mình chưa nhận được phản hồi từ model. Bạn thử hỏi lại nhé.", state, False)
 
         message: Dict[str, Any] = (choices[0].get("message") or {})
         content: str = (message.get("content") or "").strip()
         tool_calls = message.get("tool_calls") or []
 
-        logger.info(f"[chat] reply: tool_calls_detected={bool(tool_calls)}")
         if tool_calls:
-            # 2) Có tool-call -> chỉ xử lý tool đầu tiên theo quy ước
+            # parse để lấy fix_instructions
             first_tc = tool_calls[0] or {}
             fn = (first_tc.get("function") or {})
             name = (fn.get("name") or "").strip()
             args_raw = fn.get("arguments")
             args = _safe_json_parse(args_raw) if not isinstance(args_raw, dict) else (args_raw or {})
-
-            logger.info(f"[chat] reply: tool={name}, args={args}")
+            
             if name != "run_fix":
                 fallback = content or "Mình chưa rõ yêu cầu. Bạn có muốn mình sửa code không?"
-                logger.info("[chat] reply: unexpected tool name, fallback message returned")
+                logger.info("[chat] ↩️ Trả về fallback (tool không khớp)")
                 return (fallback, state, False)
 
-            # Chuẩn bị dữ liệu truyền vào _exec_fix_on_current_code
             base_code = (latest_fixed or origin_code or "").strip()
             fix_instructions = (args.get("fix_instructions") or question or "").strip()
 
             fixed_code, reply_msg = self._exec_fix_on_current_code(
-                model=model,
-                language=language,
-                base_code=base_code,
-                fix_instructions=fix_instructions,
+                model=model, language=language, base_code=base_code, fix_instructions=fix_instructions
             )
 
-            logger.info(f"[chat] reply: fix executed, fixed_code present={fixed_code}")
-            logger.debug(f"[chat] reply: short_msg={reply_msg!r}")
-
-            # Nếu có fixed_code -> cập nhật state tại đây
+            # Cập nhật code đã fix vào state
             if fixed_code:
                 state.fixed_code = fixed_code
-                logger.info("[chat] reply: fix done, state.fixed_code updated")
 
-            # Tạo câu trả lời cho người dùng, nêu rõ đã fix theo gì
             return (reply_msg, state, True)
 
-        # 3) Không có tool-call -> trả lời trực tiếp cho review/giải thích
+        # Không có tool-call -> trả lời trực tiếp
         if not content:
             content = "Bạn muốn mình giải thích/đánh giá phần nào của code?"
-        logger.info("[chat] reply: no tool, returning direct answer")
         return (content, state, False)
