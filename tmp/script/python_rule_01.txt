@@ -1,0 +1,187 @@
+PYTHON RULES — CODE STYLE & BEST PRACTICES (v1)
+
+SCOPE
+- Áp dụng cho code Python 3.10+.
+- Ưu tiên chuẩn PEP 8, PEP 257, PEP 484; công cụ: black, isort, ruff/flake8, mypy, pytest.
+
+1) TỔNG QUAN
+- Code rõ ràng, nhất quán, dễ đọc hơn là clever.
+- Tuân PEP 8 (style), PEP 257 (docstring), PEP 484 (type hints).
+- Ưu tiên tính bất biến (immutability) khi có thể; hạn chế side-effects không cần thiết.
+- Small functions, single responsibility; module gọn, ít phụ thuộc vòng.
+
+2) ĐỊNH DẠNG (FORMATTING)
+- Dùng black để format (line length 88, hoặc 100 nếu team quy định).
+- Indent 4 spaces, không dùng tab.
+- Mỗi file kết thúc bằng newline.
+- Bao quanh top-level function/class bằng 2 dòng trống; trong class giữa methods 1 dòng trống.
+
+3) IMPORTS
+- Thứ tự: standard library → third-party → local; dùng isort để sắp xếp.
+- Không import wildcard (*). Ưu tiên import cụ thể hoặc import module.
+- Alias rõ ràng: import numpy as np, import pandas as pd.
+- Đặt imports ở đầu file, trừ khi cần lazy import (ghi chú lý do).
+
+4) ĐẶT TÊN (NAMING)
+- module, package: snake_case; file test: test_*.py
+- function, variable, attribute: snake_case
+- constant: UPPER_SNAKE_CASE
+- class, exception: PascalCase
+- protected: _internal; private (convention) __name trong class
+- tên phải có nghĩa; tránh tên 1 chữ (trừ i, j trong vòng lặp ngắn).
+
+5) KHOẢNG TRẮNG & DẤU CÁCH
+- Khoảng trắng sau dấu phẩy, sau dấu hai chấm trong dict.
+- Không khoảng trắng thừa bên trong ngoặc.
+- Toán tử gán và so sánh: khoảng trắng 2 bên (a == b, x = 1).
+- Không căn hàng thủ công; để formatter lo.
+
+6) CHUỖI KÝ TỰ
+- f-string ưu tiên cho format: f"{var=}" khi debug.
+- Dùng triple quotes cho chuỗi nhiều dòng chỉ khi cần thiết (hoặc docstring).
+- Escape rõ ràng; ưu tiên raw-string cho regex: r"...".
+
+7) DOCSTRING (PEP 257)
+- Tất cả public modules, classes, functions cần docstring.
+- Dòng đầu tóm tắt ngắn; thêm đoạn chi tiết, args/returns/raises nếu cần.
+- Giọng văn mô tả hành vi, không mô tả cách dùng đã hiển nhiên.
+- Ví dụ:
+  """Short summary.
+  Args:
+      x: ...
+  Returns:
+      ...
+  Raises:
+      ...
+  """
+
+8) TYPE HINTS (PEP 484)
+- Viết type cho hàm public (args, return). Ví dụ: def foo(x: int) -> str: ...
+- from __future__ import annotations để tránh forward-reference rắc rối.
+- typing: use list[str], dict[str, Any] (Python 3.9+ generic builtins).
+- Optional[T] → T | None (3.10+). Tránh Any nếu có thể.
+- Chạy mypy (strict đội hình dần): no implicit Optional, disallow untyped defs ở core.
+
+9) HÀM & CLASS
+- Hàm ngắn, rõ ràng; tối đa ~20–30 dòng nếu có thể.
+- Tránh nhiều tham số; nhóm bằng dataclass/TypedDict/namedtuple khi phù hợp.
+- Class: nhỏ, cohesive; dùng @dataclass cho data model đơn giản.
+- Ưu tiên composition hơn inheritance. Interface qua Protocol/ABC khi cần.
+
+10) XỬ LÝ LỖI
+- Bắt lỗi cụ thể (ValueError, KeyError...), không dùng bare except.
+- Không nuốt exception im lặng; ít nhất log nguyên nhân.
+- Dùng raise from để giữ traceback gốc.
+- Clean-up bằng context manager (with) thay vì try/finally khi có thể.
+
+11) LOGGING
+- Không dùng print trong production; dùng logging (INFO cho flow, WARNING/ERROR cho vấn đề).
+- Log có ngữ cảnh: extra fields/structured logs nếu có.
+- Không log secrets/PII. Mask hoặc bỏ hẳn.
+
+12) TESTING
+- Dùng pytest. Tên test: test_function_behavior.
+- AAA pattern (Arrange–Act–Assert); 1 khía cạnh cho mỗi test.
+- Sử dụng fixtures thay setup phức tạp; fake/patch IO/HTTP.
+- Coverage meaningful (không chạy đua %), ưu tiên logic quan trọng.
+
+13) I/O & FILES
+- Dùng with open(...) as f: ...
+- Mã hoá UTF-8 mặc định; xác định newline nếu cross-platform.
+- Validation input; xử lý lỗi I/O rõ ràng.
+
+14) COLLECTIONS & MUTABILITY
+- Dùng list/dict/set comprehension rõ ràng; tránh lồng nhiều tầng.
+- Không dùng mutable default args: def foo(x=[], y={}):  # sai
+  Dùng None và gán bên trong.
+- copy/shallow vs deep: hiểu đúng khi truyền object.
+
+15) CONTROL FLOW
+- Tránh else sau return trong cùng nhánh (early return).
+- Dùng any/all, sum, enumerate thay vì for thủ công khi rõ ràng hơn.
+- Match/case (3.10+) chỉ khi thực sự cải thiện rõ.
+
+16) ASYNC & CONCURRENCY
+- async/await cho I/O-bound, không cho CPU-bound.
+- Không gọi blocking I/O trong async; dùng thread executor nếu bắt buộc.
+- Bảo vệ shared state; queue/locks khi cần.
+- Thư viện: asyncio, aiohttp/HTTPX (async), không trộn sync/async tùy tiện.
+
+17) HIỆU NĂNG
+- Ưu tiên thuật toán đúng trước tối ưu vi mô.
+- Tránh tạo object dư thừa trong vòng lặp nóng.
+- Sử dụng generator, lazy eval khi xử lý nhiều dữ liệu.
+- Đo đạc bằng profiling/tracing trước khi tối ưu.
+
+18) BẢO MẬT
+- Không commit secrets (.env, vault, secret manager).
+- Validate input, escape output. Tránh eval/exec với dữ liệu ngoài.
+- Dùng prepared statements cho DB; không build SQL thủ công.
+- Cập nhật dependencies thường xuyên; bật dependabot/renovate.
+
+19) API/HTTP
+- Tách model I/O và business model (DTO vs domain).
+- Validate/parse bằng pydantic/dataclasses.
+- Timeouts, retries, circuit breaker (nếu gọi dịch vụ ngoài).
+- Không ném raw exception ra HTTP; map sang mã lỗi có nghĩa.
+
+20) PACKAGING & DEPENDENCIES
+- Virtual env (venv/uv/poetry). Pin version hợp lý (constraints).
+- Tách optional deps theo extras (e.g., foo[dev]).
+- Setup tool: pyproject.toml cho black, isort, ruff/mypy/pytest.
+
+21) COMMENTS
+- Comment “tại sao”, không mô tả “cái gì” đã rõ bởi code.
+- TODO/FIXME phải có ticket/issue id. Dọn định kỳ.
+
+22) GIT & CI
+- Commit nhỏ, message rõ (feat/fix/refactor).
+- PR có mô tả, checklist, tests; CI chạy lint + test + type check.
+- Không push thẳng main; luôn review.
+
+23) LINT & TOOLING (khuyến nghị config)
+- black: line-length 88 (hoặc 100), target-version = py310+
+- isort: profile = black
+- ruff/flake8: bật lỗi cơ bản (F,E,W), PEP8-naming; cấm unused imports/vars.
+- mypy: implicitOptional = False; disallow untyped defs ở core; strict ở domain.
+
+24) DOC & EXAMPLES
+- README ở project/module; doc usage tối thiểu cho public API.
+- Ví dụ ngắn, chạy được; không copy-paste code lỗi thời.
+
+25) DATA & SERIALIZATION
+- Dùng json, pydantic model để (de)serialize; timezone-aware cho datetime.
+- Không lẫn naive/aware datetimes; luôn lưu UTC.
+
+26) RANDOM & TIME
+- Seed cho reproducibility trong test/benchmark.
+- Sử dụng monotonic clock cho đo thời gian, không dùng datetime.now.
+
+27) CLEANUP & CONTEXT
+- with context managers cho tài nguyên (file, lock, session, client).
+- Implement __enter__/__exit__ hoặc dùng contextlib.
+
+28) EXCEPTIONS DESIGN
+- Tạo custom exceptions meaningful; không lạm dụng.
+- Docstring cho exceptions public; message súc tích.
+
+29) PUBLIC API STABILITY
+- Ẩn chi tiết nội bộ; export có chủ đích trong __all__.
+- Deprecation: cảnh báo rõ ràng, thời gian gỡ bỏ.
+
+30) MẪU NHỎ (MINI EXAMPLES)
+- Mutable default args (đúng):
+  def foo(x=None):
+      if x is None:
+          x = []
+      ...
+- Context manager:
+  with open(path, "r", encoding="utf-8") as f:
+      data = f.read()
+- f-string:
+  user = "ann"
+  print(f"Hello, {user}")
+- Type hints:
+  from typing import Iterable
+  def mean(xs: Iterable[float]) -> float: ...
+

@@ -5,7 +5,7 @@ import streamlit as st
 from chat.llm.azure_client import AzureOpenAIChatClient
 from chat.llm.openai_client import OpenAIChatClient
 from config.constant import APP_TITLE, EXT_MAP, LANGUAGE_OPTIONS, OPENAI_MODELS, PROVIDER_OPTIONS
-from config.settings import settings
+from config.env import settings
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.language import guess_lang_from_code
 from chat.chat_conversasion import ChatConversation
@@ -35,7 +35,7 @@ with st.sidebar:
                 value=settings.AZURE_OPENAI_API_BASE,
             )
             azure_api_version = st.text_input("Azure API Version", value=settings.AZURE_OPENAI_API_VERSION)
-            api_key = st.text_input("Azure API Key", type="password", help="Hoặc AZURE_OPENAI_API_KEY.")
+            api_key = st.text_input("Azure API Key", type="password", value=settings.AZURE_OPENAI_API_KEY, help="Hoặc AZURE_OPENAI_API_KEY.")
             model = st.text_input(
                 "Deployment name (Azure)",
                 placeholder="vd: gpt-4o-mini-deploy",

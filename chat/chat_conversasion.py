@@ -5,11 +5,13 @@ from typing import Dict, List, Tuple, Any, Optional
 
 from chat.chat_message import ChatMessage
 from chat.llm.chat_client import ChatClient
+from chat.tools import TOOLS
 from config.logging import logger
+from retriever.pinecone.rule.rule_retriever import PineconeRuleRetriever
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.markdown import extract_code_block
 
-from chat.prompts import SYSTEM_CHAT
+from chat.prompts import build_rule_answer_prompt
 from chat.prompts import build_fix_prompt, build_summary_prompt, build_system_context
 from utils.tokens import count_tokens_tiktoken
 
@@ -37,7 +39,7 @@ def _format_chat_messages(msgs: List[ChatMessage]) -> str:
 
 def _build_messages_with_budget(
     *,
-    base_messages: List[ChatMessage],
+    base_messages: ChatMessage,
     chat_history: List[Dict[str, str]],
     new_user_text: str,
     model: str,
@@ -56,43 +58,22 @@ def _build_messages_with_budget(
 
     # Thử lấy từ 10 → 0 lượt gần nhất
     for keep in range(max_turns, -1, -1):
-        trial_messages = base_messages + history_msgs[-keep:] + [new_user_msg]
+        trial_messages = [base_messages] + history_msgs[-keep:] + [new_user_msg]
         token_count = count_tokens_tiktoken(trial_messages, model)
         logger.info(f"[chat] Thử build messages với {keep} lượt gần nhất: {token_count} tokens")
         if token_count <= max_tokens:
             return trial_messages  # cùng model, đủ token → dùng ngay
 
     # Quá giới hạn: chỉ dùng base + user
-    return base_messages + [new_user_msg]
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "run_fix",
-            "description": "Sửa/refactor code theo yêu cầu hiện tại của người dùng.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "fix_instructions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "Các bước sửa cụ thể, mỗi phần tử là 1 chỉ thị ngắn, có thể bao gồm: "
-                            "bugfix cụ thể, thêm/thay đổi import, refactor, tối ưu hiệu năng, chuẩn hoá style, thêm type hints,…"
-                        ),
-                    },
-                },
-                "required": ["fix_instructions"],
-            },
-        },
-    },
-]
+    return [base_messages] + [new_user_msg]
 
 class ChatConversation:
     def __init__(self, *, client: ChatClient, state_store: SessionStateStore):
         self.client = client
         self.state_store = state_store
+        self.rule_retriever = PineconeRuleRetriever(
+            index_name="code-rules"
+        )
 
     def _summarize_changes(
         self, *, model: str, language: str, base_code: str, fixed_code: str
@@ -114,7 +95,7 @@ class ChatConversation:
             logger.exception(f"[chat] Lỗi LLM khi tóm tắt thay đổi code: {e}")
             return ""
 
-    def _exec_fix_on_current_code(
+    def _handle_fix_code(
         self, *, model: str, language: str, base_code: str, fix_instructions: str
     ) -> Tuple[Optional[str], str]:
         """ Thực hiện fix code hiện tại theo hướng dẫn, trả về (fixed_code, reply_message) """
@@ -151,10 +132,53 @@ class ChatConversation:
             reply = "✅ Đã áp dụng yêu cầu chỉnh sửa và cập nhật bản sửa trong panel."
 
         return fixed_code, reply
+    
+    def _answer_with_rules(
+        self, *, model: str, question: str, rule_snippets: list[dict]
+    ) -> str:
+        """Gọi LLM để trả lời câu hỏi dựa trên RULES + QUESTION. Trả về chuỗi trả lời."""
+        logger.info("[chat] 🧠 Gọi LLM để trả lời dựa trên RULES (context-grounded)")
 
+        prompt = build_rule_answer_prompt(question=question, rule_snippets=rule_snippets)
+        messages = [
+            ChatMessage("system", prompt["system"]),
+            ChatMessage("user", prompt["user"]),
+        ]
+        logger.info(f"[chat] Messages LLM (answer-with-rules):\n{_format_chat_messages(messages)}")
+
+        try:
+            reply = self.client.chat_completion(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+            ) or ""
+            return reply.strip()
+        except Exception as e:
+            logger.exception(f"[chat] ❌ Lỗi LLM khi trả lời dựa trên RULES: {e}")
+            return "Hiện mình không thể trả lời dựa trên tài liệu. Bạn có muốn mình sửa code luôn không?"
+
+    def _handle_search_rule(self, *, args: dict, language: str, question: str, model: str) -> str:
+        query = (args.get("query") or question or "").strip()
+        lang = (args.get("language") or language or "").strip()
+        if not query or not lang:
+            return "Thiếu từ khóa hoặc ngôn ngữ để tìm rule."
+
+        # 1) Gọi retriever
+        res = self.rule_retriever.search(query=query, language=lang, k=6, score_threshold=0.25)
+
+        if res.hits == 0:
+            return "Không tìm thấy rule phù hợp với yêu cầu của bạn !"
+
+        # 2) Tóm tắt bằng LLM
+        return self._answer_with_rules(
+            model=model,
+            question=question,
+            rule_snippets=[s.__dict__ for s in res.snippets],
+        )
+        
     def _call_llm_with_tools(
         self,
-        *, model: str, base_messages: List[ChatMessage], chat_history: List[Dict[str, str]], question: str
+        *, model: str, base_messages: ChatMessage, chat_history: List[Dict[str, str]], question: str
     ) -> Dict[str, Any]:
         """ Gọi LLM với tool hỗ trợ, trả về raw response từ LLM. """
         logger.info("[chat] Gọi LLM với tool hỗ trợ")
@@ -195,9 +219,9 @@ class ChatConversation:
 
         # System context + system chat
         system_context = build_system_context(origin_code=origin_code, latest_fixed=latest_fixed, language=language)
-        base_msgs = [ChatMessage("system", SYSTEM_CHAT), ChatMessage("system", system_context)]
+        base_msgs = ChatMessage("system", system_context)
 
-        # 1) Gọi LLM
+        # Gọi LLM với tool hỗ trợ
         try:
             raw = self._call_llm_with_tools(
                 model=model, base_messages=base_msgs, chat_history=chat_history, question=question
@@ -216,38 +240,35 @@ class ChatConversation:
         tool_calls = message.get("tool_calls") or []
 
         if tool_calls:
-            # parse để lấy fix_instructions
-            first_tc = tool_calls[0] or {}
-            fn = (first_tc.get("function") or {})
+            tc = tool_calls[0] or {}
+            fn = (tc.get("function") or {})
             name = (fn.get("name") or "").strip()
             args_raw = fn.get("arguments")
             args = _safe_json_parse(args_raw) if not isinstance(args_raw, dict) else (args_raw or {})
-            
-            if name != "run_fix":
-                fallback = content or "Mình chưa rõ yêu cầu. Bạn có muốn mình sửa code không?"
-                logger.info("[chat] ↩️ Trả về fallback (tool không khớp)")
-                return (fallback, state, False)
 
-            base_code = (latest_fixed or origin_code or "").strip()
-            if not base_code:
-                return None, "⚠️ Chưa có code để sửa. Hãy dán code hoặc yêu cầu review trước."
-            
-            raw_ins = args.get("fix_instructions", question)  # ưu tiên tool args
-            if isinstance(raw_ins, (list, tuple)):
-                raw_ins = "\n".join(map(str, raw_ins))
-            elif not isinstance(raw_ins, str):
-                raw_ins = str(raw_ins or "")
-            fix_instructions = raw_ins.strip()
+            if name == "search_rule":
+                reply = self._handle_search_rule(args=args, language=language, question=question, model=model)
+                return (reply, state, False)
 
-            fixed_code, reply_msg = self._exec_fix_on_current_code(
-                model=model, language=language, base_code=base_code, fix_instructions=fix_instructions
-            )
+            if name == "run_fix":
+                base_code = (latest_fixed or origin_code or "").strip()
+                if not base_code:
+                    return None, "⚠️ Chưa có code để sửa. Hãy dán code hoặc yêu cầu review trước."
+                raw_ins = args.get("fix_instructions", question)
+                if isinstance(raw_ins, (list, tuple)):
+                    raw_ins = "\n".join(map(str, raw_ins))
+                elif not isinstance(raw_ins, str):
+                    raw_ins = str(raw_ins or "")
+                fix_instructions = raw_ins.strip()
 
-            # Cập nhật code đã fix vào state
-            if fixed_code:
-                state.fixed_code = fixed_code
+                fixed_code, reply_msg = self._handle_fix_code(
+                    model=model, language=language, base_code=base_code, fix_instructions=fix_instructions
+                )
+                # Cập nhật code đã fix vào state
+                if fixed_code:
+                    state.fixed_code = fixed_code
 
-            return (reply_msg, state, True)
+                return (reply_msg, state, True)
 
         # Không có tool-call -> trả lời trực tiếp
         if not content:
