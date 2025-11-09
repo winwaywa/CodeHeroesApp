@@ -1,4 +1,5 @@
 # app/main.py
+from pathlib import Path
 from typing import Dict, List
 import streamlit as st
 
@@ -7,6 +8,7 @@ from chat.llm.openai_client import OpenAIChatClient
 from config.constant import APP_TITLE, EXT_MAP, LANGUAGE_OPTIONS, OPENAI_MODELS, PROVIDER_OPTIONS
 from config.env import settings
 from stores.session_state_store import SessionState, SessionStateStore
+from utils.code_diff import make_github_like_unified_html
 from utils.language import guess_lang_from_code
 from chat.chat_conversasion import ChatConversation
 from config.logging import logger
@@ -64,50 +66,78 @@ state.model = model
 store.set(state)
 
 # ============== Panel (code) ==============
-code_text = st.text_area("Your code", height=280, placeholder="Paste your code…")
+# ---------- Container khung input + diff ----------
+with st.container(border=True):
+    # Input code (gốc)
+    code_text = st.text_area(
+        "Your code",
+        height=280,
+        placeholder="Paste your code…",
+        label_visibility="visible",
+        value=state.origin_code or ""
+    )
 
-# Cập nhật state.code khi nhập
-if code_text != state.origin_code:
-    state.fixed_code = ""  # reset fixed code khi đổi code gốc
-    state.chat_messages = []  # reset chat messages khi đổi code gốc
-    state.origin_code = code_text
-    store.set(state)
+    # Cập nhật state khi user nhập
+    if code_text != (state.origin_code or ""):
+        state.fixed_code = ""           # reset khi đổi code gốc
+        state.chat_messages = []        # reset chat theo logic bạn đang dùng
+        state.origin_code = code_text
+        store.set(state)
 
-# Detect ngôn ngữ từ code
-stripped = (state.origin_code or "").strip()
-if stripped:
-    detected_lang = guess_lang_from_code(stripped)
-    if detected_lang:
-        # Tự động nhận diện
-        if detected_lang != state.language:
+    # Auto detect ngôn ngữ (không có options UI)
+    stripped = (state.origin_code or "").strip()
+    if stripped:
+        detected_lang = guess_lang_from_code(stripped)
+        if detected_lang and detected_lang != state.language:
             state.language = detected_lang
             store.set(state)
-        st.success(f"Đã tự động phát hiện ngôn ngữ: **{detected_lang}**", icon="🔍")
-    else:
-        # Không detect được -> yêu cầu chọn
-        st.warning("Không nhận diện được ngôn ngữ. Vui lòng chọn:", icon="⚠️")
-        selected_lang = st.selectbox(
-            "Chọn ngôn ngữ",
-            LANGUAGE_OPTIONS
-        )
-        if selected_lang != state.language:
-            state.language = selected_lang
-            store.set(state)
+        if detected_lang:
+            st.success(f"🔍 Đã phát hiện ngôn ngữ: **{detected_lang}**")
+        else:
+            st.warning("⚠️ Không nhận diện được ngôn ngữ — dùng mặc định 'text'.")
 
-# fixed code output
-if (state.fixed_code or "").strip():
-    st.subheader("✅ Code đã Fix")
-    st.code(state.fixed_code, language=state.language or "text")
-    download_name = "fixed_code" + EXT_MAP.get(state.language or "text", ".txt")
-    st.download_button(
-        "⬇️ Tải code đã fix",
-        data=state.fixed_code.encode("utf-8"),
-        file_name=download_name,
-        mime="text/plain",
-        use_container_width=True,
-    )
-else:
-    st.caption("Code được fix sẽ hiển thị ở đây")
+    # Nút Replace / Clear (giữ nguyên)
+    col_rp, col_cl = st.columns([1,1])
+    with col_rp:
+        can_replace = bool((state.fixed_code or "").strip())
+        if st.button("↔️ Replace original with fixed", use_container_width=True, disabled=not can_replace):
+            state.origin_code = state.fixed_code
+            state.fixed_code = ""
+            store.set(state)
+            st.success("Đã replace: original = fixed")
+            st.rerun()
+
+    with col_cl:
+        if st.button("🧹 Clear", use_container_width=True):
+            state.origin_code = ""
+            state.fixed_code = ""
+            state.chat_messages = []
+            store.set(state)
+            st.rerun()
+
+    # Diff và preview fixed — hiển thị ngay trong cùng khung
+    if (state.origin_code or "").strip() and (state.fixed_code or "").strip():
+        st.markdown("—")
+        st.markdown('<div class="section-title">Fixed code</div>', unsafe_allow_html=True)
+        st.code(state.fixed_code, language=state.language or "text")
+
+        with st.expander("ℹ️ Diff"):
+            filename = "snippet" + EXT_MAP.get(state.language or "text", ".txt")
+            diff_html = make_github_like_unified_html(
+                state.origin_code,
+                state.fixed_code,
+                filename_a=filename,
+                filename_b=f"{Path(filename).stem}.fixed{Path(filename).suffix}",
+                n=3
+            )
+            st.components.v1.html(
+                f'{diff_html}',
+                height=380,
+                scrolling=True
+            )
+    else:
+        st.caption("Code đã fix sẽ hiển thị ở đây !")
+
 
 # ============== Chat (Sidebar) ==============
 with chat_tab:
