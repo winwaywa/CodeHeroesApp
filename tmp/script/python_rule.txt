@@ -1,0 +1,634 @@
+DANH SÁCH QUY TẮC (RULES) PYTHON – TỔNG HỢP ĐẦY ĐỦ, DÙNG LÀM CHECKLIST
+
+== 1) TƯ DUY CHUNG ==
+
+Code rõ ràng, đơn giản, dễ đọc quan trọng hơn “thông minh”.
+
+Ưu tiên hàm/nguyên tắc làm một việc (SRP). Tránh code lặp (DRY), KISS, YAGNI.
+
+Đặt tiêu chí: dễ bảo trì, test được, đo được.
+
+== 2) PEP 20 – THE ZEN OF PYTHON ==
+
+Beautiful is better than ugly; Explicit > Implicit; Simple > Complex.
+
+Readability counts; There should be one— and preferably only one —obvious way to do it.
+
+== 3) PEP 8 – CODE STYLE CƠ BẢN ==
+
+Indent 4 spaces; max line length 88–100 (ưu tiên 88 với Black).
+
+Import theo thứ tự: stdlib → third-party → local, cách nhau dòng trống.
+
+Tên: module_package_snake_case, function_snake_case, ClassCamelCase, CONSTANT_SNAKE_CASE.
+
+== 4) TỰ ĐỘNG HÓA CODE STYLE ==
+
+Dùng Black (format), Ruff/Flake8 (lint), isort (sắp xếp import).
+
+Chạy tự động trong pre-commit và CI.
+
+== 5) TYPE HINTS (PEP 484+) ==
+
+Thêm kiểu cho public API, đối số/hàm trả về; tránh Any tràn lan.
+
+Dùng mypy/pyright; bật strict cho module quan trọng.
+
+Sử dụng typing: TypedDict/Protocol/TypeAlias/Final/Literal/Annotated.
+
+== 6) DOCUMENTATION STYLE ==
+
+Docstring theo Google/NumPy style hoặc reST; PEP 257.
+
+Viết “tại sao”, ví dụ sử dụng, ràng buộc/giới hạn.
+
+== 7) CẤU TRÚC DỰ ÁN (PACKAGE) ==
+
+src/ layout: src/<package>/…, tests/ tách riêng.
+
+init.py rõ ràng; hạn chế dùng import *; kiểm soát all.
+
+== 8) QUẢN LÝ MÔI TRƯỜNG ==
+
+Luôn dùng virtualenv (venv/conda/uv venv).
+
+Không cài global; pin phiên bản quan trọng (requirements.txt/poetry.lock).
+
+== 9) QUẢN LÝ PHỤ THUỘC ==
+
+pip + uv/poetry/pip-tools; lock version; nhóm extras (dev, test).
+
+Tránh dependency “nặng” nếu stdlib đủ.
+
+== 10) PYPROJECT.TOML ==
+
+Dùng làm nguồn sự thật: build-system, tool configs (black, ruff, isort, mypy, pytest).
+
+Khai báo entry_points (console_scripts) nếu có CLI.
+
+== 11) PHIÊN BẢN PYTHON ==
+
+Dùng LTS hiện hành (3.10+); bật future (annotations) khi cần.
+
+Tránh phụ thuộc vào behavior deprecated.
+
+== 12) MODULE & IMPORTS ==
+
+Import cụ thể; tránh alias mơ hồ.
+
+Không circular import; nếu cần, di chuyển type-hint vào TYPE_CHECKING.
+
+== 13) BIẾN & HẰNG ==
+
+snake_case cho biến; UPPER_SNAKE_CASE cho hằng.
+
+Không thay đổi hằng ở runtime; dùng typing.Final.
+
+== 14) HÀM & THAM SỐ ==
+
+≤ 3–5 tham số; dùng dataclass/pydantic model cho tham số phức tạp.
+
+Không dùng mutable default (list/dict/set) → dùng None + init.
+
+== 15) LỚP & OOP ==
+
+Ưu tiên composition; mixin nhỏ, mục đích rõ.
+
+Tránh kế thừa sâu; sử dụng Protocol cho duck typing.
+
+== 16) DATACLASS & ATTRS ==
+
+@dataclass(frozen=True, slots=True) cho value object.
+
+Cân nhắc attrs cho tính năng nâng cao; cung cấp repr tốt.
+
+== 17) BẤT BIẾN & SÂU BẢN SAO ==
+
+Dùng bản sao (copy/deepcopy) khi cần; tránh rò rỉ tham chiếu.
+
+Expose tuple/MappingProxyType thay vì list/dict mutable.
+
+== 18) EXCEPTION DESIGN ==
+
+Tạo hierarchy exception cho domain; thông điệp rõ ràng, đính kèm cause.
+
+Không nuốt exception; log + re-raise hoặc chuyển ngữ cảnh.
+
+== 19) XỬ LÝ NGUỒN LỰC ==
+
+Với file/socket/process: dùng context manager (with).
+
+Luôn đóng tài nguyên; đến cả ThreadPool/ProcessPool.
+
+== 20) LOGGING ==
+
+logging (stdlib) + cấu hình Formatter/Handler chuẩn.
+
+Mức độ: ERROR/WARN/INFO/DEBUG; không log PII/secret.
+
+== 21) CẤU HÌNH ỨNG DỤNG ==
+
+Qua env (12-factor); dùng pydantic-settings/dynaconf.
+
+Validate cấu hình lúc khởi động; mặc định an toàn.
+
+== 22) BẢO MẬT CƠ BẢN ==
+
+Không hardcode secrets; dùng Secret Manager.
+
+Escape/validate input; chống path traversal/command injection.
+
+Hash password bằng bcrypt/argon2; tuyệt đối không “tự nghĩ” crypto.
+
+== 23) THỜI GIAN & TIMEZONE ==
+
+Dùng datetime timezone-aware (UTC); convert khi hiển thị.
+
+dateutil/zoneinfo; tránh naive datetime.
+
+== 24) SỐ HỌC & TIỀN TỆ ==
+
+Decimal cho tiền tệ; đặt context/quantize rõ ràng.
+
+Tránh float cho so sánh chính xác.
+
+== 25) FILES & PATHS ==
+
+pathlib thay cho os.path; encoding UTF-8 rõ ràng.
+
+Không đọc hết file lớn vào RAM nếu không cần.
+
+== 26) SUBPROCESS/OS ==
+
+Dùng subprocess.run([...], check=True) với danh sách args; tránh shell=True.
+
+Sanitise input nếu phải dùng shell=True.
+
+== 27) ITERABLES & GENERATORS ==
+
+Dùng generator cho stream dữ liệu lớn; itertools hữu ích.
+
+Không tạo list không cần thiết; yield từ hàm con (yield from).
+
+== 28) LIST/DICT/SET COMPREHENSIONS ==
+
+Sử dụng khi ngắn gọn, dễ đọc; tránh lồng quá 2 cấp.
+
+Ưu tiên dict/set comprehension thay vì vòng lặp “thủ công”.
+
+== 29) DECORATORS ==
+
+Viết decorator giữ nguyên signature: functools.wraps.
+
+Không lạm dụng; ghi chú side effect.
+
+== 30) CONTEXTLIB ==
+
+contextmanager cho resource tạm; ExitStack cho nhiều tài nguyên.
+
+suppress cho ngoại lệ đã biết, hẹp phạm vi.
+
+== 31) CACHING ==
+
+functools.lru_cache cho pure function; xác định maxsize, typed.
+
+Xóa cache khi thay đổi cấu hình/nguồn dữ liệu.
+
+== 32) HIỆU NĂNG CƠ BẢN ==
+
+Đo trước tối ưu (timeit, cProfile, py-spy).
+
+Tránh tạo object trong hot loop; dùng locals hợp lý.
+
+Chọn cấu trúc phù hợp (deque, array, bisect, heapq).
+
+== 33) BỘ NHỚ/GARBAGE COLLECTOR ==
+
+Tránh reference cycle; dùng weakref nếu cần.
+
+Xác định rò rỉ bằng tracemalloc/objgraph.
+
+== 34) ASYNCIO CƠ BẢN ==
+
+Dùng async/await cho I/O; không cho CPU-bound.
+
+Quản lý event loop rõ ràng; create_task + gather + timeout.
+
+== 35) ASYNCIO NÂNG CAO ==
+
+Semaphore/BoundedSemaphore để giới hạn đồng thời.
+
+Shield/timeout; TaskGroup (3.11+) cho cấu trúc tốt hơn.
+
+== 36) THREADING & MULTIPROCESSING ==
+
+I/O-bound: ThreadPoolExecutor; CPU-bound: ProcessPoolExecutor.
+
+Tránh chia sẻ mutable; queue cho giao tiếp.
+
+== 37) TÁC VỤ ĐỊNH KỲ/NỀN ==
+
+APScheduler/Celery/RQ/Arq; idempotent; retry/backoff; DLQ.
+
+Cấu hình timeout; giám sát job.
+
+== 38) SERIALIZATION ==
+
+json/orjson/ujson; tránh pickle cho dữ liệu không tin cậy.
+
+Schema rõ ràng, version; cân nhắc msgpack/avro/protobuf.
+
+== 39) PANDAS/NUMPY (NẾU DÙNG) ==
+
+Vector hóa; tránh apply trong vòng lặp.
+
+DTypes đúng; category/nullable; memory_usage().
+
+Đọc/ghi chunk cho dữ liệu lớn.
+
+== 40) SCIKIT-LEARN/ML (NẾU DÙNG) ==
+
+Pipeline/ColumnTransformer; set random_state; cross-validate.
+
+Lưu mô hình an toàn (joblib) + versioning + feature schema.
+
+== 41) WEB – FASTAPI/STARLETTE ==
+
+Tách layer: router → service → repo/clients (hexagonal).
+
+Pydantic models (request/response); validate; không lộ ORM model.
+
+Dependency injection rõ ràng; lifespan cho tài nguyên (DB, client).
+
+Log, metrics, tracing; middleware cho error handling.
+
+== 42) WEB – DJANGO ==
+
+Settings theo môi trường; SECRET_KEY không commit.
+
+App mỏng; business trong services/domain.
+
+ORM: select_related/prefetch_related; tránh N+1; index chuẩn.
+
+Forms/DRF serializers validate kỹ; CSRF, CORS đúng.
+
+== 43) API REST/GQL/GRPC ==
+
+REST: path tài nguyên, verb đúng; status code chính xác.
+
+Error format thống nhất (problem+json).
+
+GraphQL: schema nhỏ, phân trang; DataLoader chống N+1.
+
+gRPC: proto versioning; deadline/timeout.
+
+== 44) TESTING – TỔNG QUAN ==
+
+pytest + coverage; test nhanh, độc lập, repeatable.
+
+AAA (Arrange-Act-Assert); tên test mô tả hành vi.
+
+== 45) TEST ISOLATION ==
+
+Faker/mimesis cho dữ liệu; monkeypatch cho side effect.
+
+Freezer cho thời gian (freezegun); seed random.
+
+== 46) TEST DOUBLE/MOCK ==
+
+unittest.mock/pytest-mock; patch đúng vị trí (nơi dùng, không phải nơi định nghĩa).
+
+Tránh over-mock; ưu tiên test integration khi cần.
+
+== 47) TEST DB & SERVICE ==
+
+Testcontainers cho DB/Kafka/Redis; schema migration chạy trước.
+
+Dữ liệu seed nhỏ; dọn dẹp sau test.
+
+== 48) PROPERTY-BASED TESTING ==
+
+hypothesis để thử nhiều trường hợp ngẫu nhiên; define invariant.
+
+== 49) CODE COVERAGE &
+QUALITY GATE ==
+
+Bao phủ logic quan trọng; không chạy đua %.
+
+Chặn merge khi fail test/lint/type-check.
+
+== 50) CLI TOOLS ==
+
+argparse/typer/click; thông báo lỗi rõ ràng; exit code chuẩn.
+
+–help đầy đủ; autocompletion khi có thể.
+
+== 51) OBSERVABILITY ==
+
+Metrics (prometheus-client/OpenTelemetry), tracing, logs có correlation-id.
+
+Health/ready endpoint cho service.
+
+== 52) I18N/L10N ==
+
+gettext hoặc Babel; không hardcode.
+
+Định dạng số/ngày theo locale.
+
+== 53) RANDOM/UUID ==
+
+secrets cho bảo mật; random cho mục đích chung.
+
+uuid4/ulid; không dùng random cho token bảo mật.
+
+== 54) PATH & WORKING DIR ==
+
+Không giả định cwd; tính đường dẫn tương đối bằng pathlib.Path(file).
+
+Tách data/config ra ngoài package.
+
+== 55) PLUGINS/EXTENSIBILITY ==
+
+entry points (importlib.metadata); tránh import side-effects nặng.
+
+Kiểm soát phiên bản/khoảng tương thích.
+
+== 56) STARTUP/FAIL-FAST ==
+
+Validate config/deps; fail sớm nếu lỗi.
+
+In cảnh báo rõ ràng khi feature tắt/thiếu.
+
+== 57) FEATURE FLAGS ==
+
+Tên cờ rõ; owner; thời hạn xóa.
+
+Test on/off; metrics giám sát ảnh hưởng.
+
+== 58) SECURITY HEADERS/WEB ==
+
+FastAPI/Django: set CSP, HSTS, X-Frame-Options, X-Content-Type-Options.
+
+CORS whitelist cụ thể; rate limiting với SlowAPI/Django-ratelimit.
+
+== 59) REQUEST/RESPONSE SIZE ==
+
+Giới hạn body; nén (gzip/brotli); streaming cho dữ liệu lớn.
+
+Chống upload độc hại; kiểm MIME thực.
+
+== 60) DB LAYER ==
+
+SQLAlchemy 2.0: Session scope rõ; statement caching.
+
+Index phù hợp; transaction ranh giới ở service.
+
+== 61) MIGRATIONS ==
+
+Alembic/Django Migrations; chiến lược expand/contract.
+
+Zero-downtime khi có thể; backup/rollback plan.
+
+== 62) CACHE TẦNG ỨNG DỤNG ==
+
+Redis/locmem; TTL; key strategy; tránh cache PII không mã hóa.
+
+Invalidate chính xác; đo hit ratio.
+
+== 63) EXTERNAL SERVICES ==
+
+httpx/aiohttp/requests với timeout, retry, circuit breaker (resilience).
+
+Idempotency key cho POST quan trọng.
+
+== 64) FILE UPLOAD/DOWNLOAD ==
+
+Presigned URL (S3/GCS); giới hạn kích thước; antivirus khi cần.
+
+Content-Disposition; tên file an toàn.
+
+== 65) PAGINATION & TÌM KIẾM ==
+
+Offset/cursor rõ; tối đa page size; chỉ trả trường cần thiết.
+
+Index/search engine (ES/Meilisearch) có schema.
+
+== 66) TÁCH LỚP ỨNG DỤNG (LAYERING) ==
+
+API (router/view) → Service → Repo/Client.
+
+Không gọi “ngược tầng”; adapter bọc bên thứ ba.
+
+== 67) CLEAN/HEXAGONAL ARCHITECTURE ==
+
+Port (protocol/interface) ở domain; adapter ở infra.
+
+Composition root (wiring) tách khỏi domain.
+
+== 68) DEPENDENCY INJECTION (PYTHON) ==
+
+Constructor injection; provider module (Dynaconf/Pydantic Settings).
+
+Không lạm dụng global singletons; tránh import-time side effects.
+
+== 69) DUNDER & DATAMODEL ==
+
+Cài đặt repr, str, eq, hash (khi cần).
+
+enter/exit cho resource; slots để tiết kiệm bộ nhớ.
+
+== 70) IMMUTABILITY TRONG PYTHON ==
+
+dataclass(frozen=True) hoặc attrs(frozen=True); Mapping, tuple.
+
+Tránh setter với value object.
+
+== 71) VALIDATION ==
+
+Pydantic v2 cho DTO/config; validator nhỏ, thông điệp rõ.
+
+Không lộ exception thô ra API.
+
+== 72) SỬ DỤNG LAMBDA & PARTIAL ==
+
+Lambda cho callback ngắn; functools.partial thay cho closure phức tạp.
+
+Tránh lambda nhiều dòng/logic.
+
+== 73) ENUM & CONSTANTS ==
+
+Enum cho tập hữu hạn; không dùng magic string.
+
+Chuyển đổi enum <-> string qua method rõ ràng.
+
+== 74) REFLECTION & IMPORTLIB ==
+
+Hạn chế reflection; rõ ràng ánh xạ loại → class.
+
+Kiểm soát lỗi import động; sandbox nếu cần.
+
+== 75) NOTEBOOKS (JUPYTER) ==
+
+Không trộn EDA và sản xuất; pin versions; papermill/nbsphinx khi cần.
+
+Seed random; tách config; tránh state ẩn.
+
+== 76) PERFORMANCE NÂNG CAO ==
+
+Cython/Numba/PyPy khi phù hợp.
+
+Batch I/O; tránh chatty network.
+
+== 77) STRING & I/O TEXT ==
+
+f-string; không + chuỗi trong vòng lặp nóng (dùng join/StringIO).
+
+Normalise newline/encoding.
+
+== 78) INTERNATIONALIZATION INPUT/OUTPUT ==
+
+Luôn chỉ rõ encoding='utf-8'.
+
+unicodedata cho normalize; tránh lỗi accent/collation.
+
+== 79) PATTERN MATCHING (3.10+) ==
+
+match/case cho cấu trúc dữ liệu phức tạp; luôn có case mặc định.
+
+== 80) CONTINUAL INTEGRATION (CI) ==
+
+Jobs: lint → type-check → test → build → scan → publish.
+
+Cache pip/uv; matrix cho phiên bản Python.
+
+== 81) RELEASE & VERSIONING ==
+
+SemVer; tag Git; CHANGELOG; bumpversion/hatchling.
+
+Gói chuẩn: wheel; ký/scan nếu public.
+
+== 82) DISTRIBUTION ==
+
+Build via hatch/poetry/pdm; publish lên PyPI nội bộ/công khai.
+
+Không ship file thừa; kiểm tra MANIFEST.
+
+== 83) OBS & TRACING NÂNG CAO ==
+
+OpenTelemetry: spans, attributes, baggage.
+
+Kết nối logs ↔ traceId; export Prometheus/OTLP.
+
+== 84) FEATURE TOGGLING RUNTIME ==
+
+Lưu trạng thái cờ ở DB/Redis; audit ai bật/tắt.
+
+Không để cờ vĩnh viễn.
+
+== 85) AUDIT & COMPLIANCE ==
+
+Ghi lại thay đổi dữ liệu quan trọng (ai/khi nào/cái gì).
+
+Mask dữ liệu nhạy cảm trong log.
+
+== 86) MONITORING & ALERTING ==
+
+SLO/SLA; alert dựa trên symptom (latency/error rate), không chỉ CPU.
+
+Runbook cho cảnh báo phổ biến.
+
+== 87) HOT PATH & LOGGING LEVEL ==
+
+Không log DEBUG ở hot loop; sampling logs.
+
+Tách logger theo module.
+
+== 88) RETRIES & BACKOFF ==
+
+exponential backoff + jitter; giới hạn tối đa; circuit breaker.
+
+Phân loại lỗi retryable vs non-retryable.
+
+== 89) ID/KEY/ORDERING ==
+
+UUID/ULID; khoá tự sinh phải tránh va chạm.
+
+Thứ tự ổn định khi serial hóa; sort keys nếu cần.
+
+== 90) FILE LOCKING/CONCURRENCY ==
+
+Không ghi cùng file từ nhiều process/trong container mà không lock.
+
+portalocker/fasteners nếu cần.
+
+== 91) TEMPORARY FILES/DIRS ==
+
+tempfile cho đường dẫn tạm; dọn dẹp bằng context manager.
+
+== 92) VALIDATE EXTERNAL INPUT ==
+
+Pydantic/Schema; giới hạn size; denylist/allowlist path.
+
+Kiểm tra MIME thực tế của upload.
+
+== 93) EMAIL/SMS/NOTIFY ==
+
+Queue async; template i18n; retry + DLQ.
+
+Idempotency key để tránh gửi lặp.
+
+== 94) SEARCH/INDEX ==
+
+Tách layer search client; schema version hoá.
+
+Không query wildcard sâu; phân trang bằng search_after.
+
+== 95) METADATA/DATA CONTRACTS ==
+
+Tài liệu schema (OpenAPI/JSONSchema); test contract.
+
+Kiểm soát thay đổi breaking qua CI.
+
+== 96) BACKGROUND SHUTDOWN ==
+
+Graceful shutdown (signals); chờ task hoàn tất hoặc cancel có kiểm soát.
+
+Đóng pool/clients.
+
+== 97) FEATURE FLAGS TRONG TEST/DEV ==
+
+Bật giả lập; test cả 2 đường; snapshot hợp lý.
+
+== 98) ANTI-PATTERNS CẦN TRÁNH ==
+
+God module; logic trong init.py; side-effect import.
+
+Global mutable state; hungarian notation; micro-optim premature.
+
+== 99) CHECKLIST REVIEW NHANH ==
+
+Style/lint sạch? Type-check ok? Docstring hạng mục public?
+
+Optional/None-safe? Không mutable default?
+
+Exception/message/cause rõ? Context manager đủ?
+
+API ổn định? Test edge-case? Coverage hợp lý?
+
+Logging/metrics/tracing? Config theo env? Secrets an toàn?
+
+== 100) BỘ CÔNG CỤ KHUYẾN NGHỊ ==
+
+Style/Lint: Black, Ruff/Flake8, isort.
+
+Types: mypy/pyright.
+
+Test: pytest, hypothesis, testcontainers, coverage.
+
+Build/Deps: uv/poetry/pdm, pyproject.toml, pre-commit.
+
+Web: FastAPI/Starlette, Django/DRF.
+
+Observability: structlog/loguru (tuỳ), OpenTelemetry, prometheus-client.
+
+Security: bandit, safety, pip-audit.

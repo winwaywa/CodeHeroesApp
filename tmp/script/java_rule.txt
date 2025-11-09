@@ -1,0 +1,833 @@
+DANH SÁCH QUY TẮC (RULES) JAVA – TỔNG HỢP ĐẦY ĐỦ, DÙNG ĐỂ LÀM CHECKLIST
+
+== 1) QUY TẮC CHUNG VỀ MÃ NGUỒN ==
+
+Ưu tiên code rõ ràng, dễ đọc hơn “thông minh”.
+
+Một class/method chỉ nên làm một việc (SRP).
+
+Giữ hàm ngắn (thường ≤ 20–30 dòng) và ít tham số (≤ 3).
+
+Viết comment “tại sao”, hạn chế comment “cái gì” (tên tốt > comment).
+
+Tránh trùng lặp (DRY). Tránh tối ưu sớm (YAGNI/KISS).
+
+Bật cảnh báo compiler và fix sạch (–Xlint).
+
+Bật static analysis: SpotBugs, PMD, Checkstyle, SonarLint/SonarQube.
+
+== 2) ĐẶT TÊN (NAMING) ==
+
+Class/Interface: PascalCase (CustomerOrder, HttpClient).
+
+Method/Field/Variable: camelCase (processPayment, totalCount).
+
+CONSTANT: UPPER_SNAKE_CASE (MAX_SIZE).
+
+Tên thể hiện ý nghĩa, động từ cho method, danh từ cho class.
+
+Tránh viết tắt khó hiểu; thống nhất từ vựng domain.
+
+== 3) ĐỊNH DẠNG (FORMATTING) ==
+
+Indent 2 hoặc 4 spaces (không tab); thống nhất qua formatter (Spotless/Google Java Format).
+
+Dòng ≤ 120 ký tự; bọc dòng trước toán tử.
+
+Dấu { mở cùng dòng với khai báo; } đứng riêng.
+
+Một import mỗi dòng; cấm wildcard import trong code sản phẩm.
+
+Sắp xếp import: java., javax., org., com., nội bộ.
+
+== 4) TỔ CHỨC GÓI (PACKAGING) ==
+
+package name: all-lowercase, domain đảo ngược (com.mycompany.product).
+
+Tránh “god package”; nhóm theo domain/module, không nhóm thuần theo layer nếu domain rõ.
+
+Ẩn implementation trong package-internal; public API tối thiểu.
+
+== 5) OOP & THIẾT KẾ ==
+
+Ưu tiên composition hơn inheritance.
+
+Interface cho hợp đồng; class abstract cho chia sẻ behavior.
+
+Tuân thủ SOLID; đặc biệt DIP (phụ thuộc vào abstraction).
+
+Tránh các “god class”, “feature envy”, “long parameter list”.
+
+Dùng Value Object bất biến cho dữ liệu nhỏ (equals/hashCode đúng).
+
+Ưu tiên bất biến; field final khi có thể.
+
+== 6) GIÁ TRỊ BẤT BIẾN (IMMUTABILITY) ==
+
+Field private + final; không expose setter.
+
+Defensive copy với mảng/collection khi nhập/xuất.
+
+Dùng Collections.unmodifiable… hoặc List.copyOf/Set.copyOf.
+
+Với record (Java 16+), đảm bảo component cũng bất biến.
+
+== 7) NULLABILITY & OPTIONAL ==
+
+Không trả về null cho collection/array; trả về empty.
+
+Optional chỉ dùng cho return type; không dùng cho field/param.
+
+Kiểm tra null sớm (Objects.requireNonNull).
+
+Tránh Optional.get() không kiểm tra; dùng orElse/orElseGet/orElseThrow.
+
+== 8) EXCEPTIONS & XỬ LÝ LỖI ==
+
+Throw exception có ý nghĩa (IllegalArgumentException, IllegalStateException, IOException, v.v.).
+
+Checked vs unchecked: checked cho lỗi recoverable IO/SQL; domain lỗi thường unchecked.
+
+Không nuốt (swallow) exception; log + wrap/propagate.
+
+Luôn thêm message rõ ràng; giữ nguyên cause (new X(e)).
+
+Không dùng exception cho luồng điều khiển bình thường.
+
+Dùng try-with-resources cho Closeable/AutoCloseable.
+
+== 9) EQUALS, HASHCODE, COMPARETO ==
+
+Nếu override equals thì override hashCode tương thích.
+
+Dựa trên field bất biến/định danh; tránh sử dụng field biến động.
+
+compareTo nhất quán với equals; ưu tiên Comparator.comparing.
+
+== 10) GENERICS ==
+
+Dùng generics để loại bỏ raw type; cảnh báo unchecked cần cân nhắc.
+
+Sử dụng wildcards (? extends T / ? super T) đúng theo PECS (Producer-Extends, Consumer-Super).
+
+Tránh ép kiểu nguy hiểm; giới hạn scope của @SuppressWarnings.
+
+== 11) LAMBDA & METHOD REFERENCE ==
+
+Ưu tiên method reference khi rõ ràng (String::isBlank).
+
+Lambda ngắn gọn; không nhồi nhiều logic (refactor ra method).
+
+Không lạm dụng stream + lambda gây khó đọc.
+
+== 12) STREAM API ==
+
+Biết chi phí: intermediate lazy, terminal eager.
+
+Không gây side-effect trong map/filter; side-effect nếu cần => forEach cuối cùng.
+
+Dùng Collectors.toList()/toSet(); tránh toList() cũ (trước Java 16).
+
+parallelStream chỉ khi work unit đủ lớn, thread-safe, không I/O block.
+
+== 13) COLLECTIONS ==
+
+Chọn đúng cấu trúc: ArrayList (truy cập), LinkedList (chèn/xóa giữa), HashMap/HashSet (tra cứu), TreeMap/TreeSet (sắp xếp).
+
+Không sửa khi đang iterate (ConcurrentModificationException).
+
+Dùng EnumSet/EnumMap cho enum.
+
+Sử dụng computeIfAbsent/putIfAbsent/merge thay vì get-then-put.
+
+== 14) CONCURRENCY CƠ BẢN ==
+
+Tránh dùng Thread trực tiếp; ưu tiên ExecutorService.
+
+Không chia sẻ biến mutable giữa threads; nếu cần, dùng synchronized/locks/atomic/volatile phù hợp.
+
+Volatile cho visibility, không cho atomicity phức tạp.
+
+Dùng concurrent collections (ConcurrentHashMap, CopyOnWriteArrayList).
+
+Tránh deadlock: thứ tự lock nhất quán, prefer tryLock + timeout.
+
+== 15) FUTURES & COMPLETABLEFUTURE ==
+
+Sử dụng supplyAsync/runAsync với Executor tùy chỉnh (tránh default common pool cho workload nặng).
+
+thenCompose cho chaining async; thenCombine cho ghép kết quả; exceptionally/handle cho lỗi.
+
+timeouts/cancellation rõ ràng; không bỏ rơi future.
+
+== 16) REACTIVE (TÙY CHỌN) ==
+
+Chỉ dùng reactive (Project Reactor/RxJava) khi có I/O nhiều, cần backpressure.
+
+Tách biên giới reactive/imperative; không trộn lẫn vô tội vạ.
+
+Quản lý Scheduler rõ ràng; test bằng StepVerifier.
+
+== 17) I/O & FILES ==
+
+Dùng NIO.2 (java.nio.file) thay vì IO cũ.
+
+try-with-resources cho stream/reader/writer.
+
+Buffer hợp lý; tránh đọc toàn bộ file vào RAM nếu lớn.
+
+Charset rõ ràng (StandardCharsets.UTF_8).
+
+== 18) THỜI GIAN & DATE-TIME ==
+
+Dùng java.time (Instant, LocalDate, ZonedDateTime); không dùng Date/Calendar cũ.
+
+Lưu timestamp UTC (Instant); convert khi hiển thị.
+
+ZoneId rõ ràng; tránh mơ hồ DST.
+
+== 19) SERIALIZATION ==
+
+Tránh Java native serialization trong hệ thống mới (vấn đề bảo mật/compat).
+
+Dùng JSON/Protobuf/Avro khi cần trao đổi; version hóa schema.
+
+== 20) LOGGING ==
+
+API: SLF4J; impl: Logback/Log4j2.
+
+Log ở mức phù hợp: ERROR (hỏng tác vụ), WARN (bất thường), INFO (luồng chính), DEBUG/TRACE (điều tra).
+
+Dùng placeholder: log.info("User {} created", id); không dùng nối chuỗi.
+
+Không log dữ liệu nhạy cảm; chuẩn hóa correlationId/traceId.
+
+== 21) BẢO MẬT CƠ BẢN ==
+
+Không hardcode secret; dùng ENV/Secret Manager.
+
+Validate input (Bean Validation, custom validator).
+
+Escape/encode output; chống XSS/SQLi/Path Traversal.
+
+Dùng HTTPS; cài HTTP security header.
+
+Hash mật khẩu bằng bcrypt/argon2; không viết tay crypto.
+
+== 22) API THIẾT KẾ (PUBLIC/INTERNAL) ==
+
+Ổn định chữ ký method; tránh public không cần thiết.
+
+Duy trì backward compatibility hoặc versioning.
+
+Tài liệu hóa bằng Javadoc rõ ràng; ví dụ sử dụng.
+
+== 23) REST API (SPRING/JAX-RS) ==
+
+Tài nguyên theo danh từ, HTTP verb đúng: GET/POST/PUT/PATCH/DELETE.
+
+Status code chính xác; body lỗi chuẩn (problem+json).
+
+Idempotency cho PUT/DELETE; POST tạo resource trả Location.
+
+Pagination/sort/filter chuẩn; không trả tràn dữ liệu.
+
+DTO tách domain; tránh lộ entity JPA.
+
+JSON: Jackson – cấu hình rõ @JsonProperty, @JsonIgnore, modules JavaTime.
+
+== 24) VALIDATION ==
+
+Dùng Bean Validation (@NotNull, @Size, @Email, …) ở boundary (DTO).
+
+Thông báo lỗi i18n; gom lỗi nhất quán.
+
+Validate business rule ở service domain.
+
+== 25) MAP/MAPPER ==
+
+Tách mapping DTO↔Domain (MapStruct/handwritten).
+
+Tránh mapping ngầm ở nhiều nơi; thống nhất 1 lớp Mapper.
+
+== 26) PERSISTENCE (JDBC/JPA/HIBERNATE) ==
+
+Transaction rõ ràng; boundary ở service (Spring @Transactional).
+
+Lazy vs Eager: mặc định Lazy; fetch join khi cần.
+
+N+1 query: phát hiện sớm (Hibernate statistics, logs).
+
+Index phù hợp; dùng @Column(nullable = …) đúng; length hợp lý.
+
+equals/hashCode cho entity: dựa vào id bền vững (cẩn trọng lifecycle).
+
+Batch write khi cần; set fetch size cho đọc lớn.
+
+Không lộ entity lên API; dùng DTO/View.
+
+== 27) TRANSACTION & ISOLATION ==
+
+Chọn isolation theo nhu cầu (READ COMMITTED mặc định).
+
+Idempotency cho thao tác nhạy cảm; sử dụng unique key/constraint.
+
+Xử lý rollback có chủ đích; không “ăn” exception trong TX.
+
+== 28) SPRING BOOT QUY TẮC ==
+
+Cấu hình tách profile (application.yml + profiles: dev/test/prod).
+
+Không đặt logic trong @Configuration class; giữ cấu hình thuần.
+
+Component scan kiểm soát phạm vi; ưu tiên constructor injection (@Autowired trên ctor hoặc không annotation khi 1 ctor).
+
+Không dùng field injection; hạn chế @Value tràn lan (dùng @ConfigurationProperties).
+
+Validation request: @Valid ở controller.
+
+Trả lỗi thống nhất với @ControllerAdvice.
+
+Health check/metrics với Actuator; bảo vệ endpoint nhạy cảm.
+
+Sử dụng Micrometer cho metrics; log correlation (traceId).
+
+== 29) CACHING ==
+
+Cache nhất quán (Spring Cache/Redis/Caffeine); TTL rõ.
+
+Invalidate đúng thời điểm; đo lường hit ratio.
+
+Tránh cache dữ liệu nhạy cảm trừ khi mã hóa.
+
+== 30) BATCH/JOBS ==
+
+Spring Batch cho xử lý theo lô; chunk-size phù hợp.
+
+Retry/backoff cho tác vụ I/O; idempotent tasklet.
+
+== 31) TESTING ==
+
+Unit test nhanh, độc lập; đặt ở cùng module gương mặt.
+
+Sử dụng JUnit 5, AssertJ, Mockito.
+
+Test Spring: @SpringBootTest chỉ khi cần context; ưu tiên slice test (@WebMvcTest, @DataJpaTest).
+
+Integration test với Testcontainers (DB, Kafka, Redis).
+
+Kiểm thử concurrency, timeouts, edge cases, serialization.
+
+Code coverage có ý nghĩa (đúng hành vi), không đuổi % mù quáng.
+
+== 32) BUILD & DEPENDENCY ==
+
+Gradle hoặc Maven; lock version (dependencyManagement/versions plugin).
+
+Tránh xung đột version; dùng BOM (Spring Boot BOM, Jakarta EE BOM).
+
+Tách module theo domain; tránh monolith “khổng lồ” nếu không cần.
+
+== 33) HIỆU NĂNG (PERFORMANCE) ==
+
+Đo lường trước khi tối ưu (JMH cho microbenchmark).
+
+Tránh tạo object không cần; dùng StringBuilder trong vòng lặp.
+
+Chọn cấu trúc dữ liệu đúng; tránh boxing/unboxing không cần.
+
+Giảm log ở hot path; cache hợp lý.
+
+I/O non-blocking khi phù hợp; connection pooling đúng cỡ.
+
+== 34) BỘ NHỚ & GC ==
+
+Tránh rò rỉ: listener không hủy, thread pool không shutdown, cache vô hạn.
+
+Chú ý vòng đời object lớn; zero-copy khi có thể.
+
+GC tuning chỉ khi có số liệu; quan sát heap, pause time.
+
+== 35) MODULE SYSTEM (JPMS) ==
+
+Chỉ dùng khi dự án hưởng lợi: boundary rõ, encapsulation mạnh.
+
+module-info.java: exports API tối thiểu; requires chính xác.
+
+== 36) QUY ƯỚC PHIÊN BẢN & TƯƠNG THÍCH ==
+
+Theo semver khi có thể: MAJOR.MINOR.PATCH.
+
+Giữ backward compatibility cho API public; cung cấp deprecation path.
+
+== 37) TÀI LIỆU HÓA ==
+
+Javadoc cho API công khai: mô tả, @param, @return, @throws, ví dụ.
+
+README có: build, run, config, kiến trúc ngắn gọn.
+
+ADR (Architecture Decision Record) cho quyết định lớn.
+
+== 38) OBSERVABILITY ==
+
+Metrics (Micrometer/Prometheus), Tracing (OpenTelemetry), Logs (ELK).
+
+CorrelationId/TraceId xuyên suốt request.
+
+Cảnh báo (alert) dựa trên SLO/SLA, không chỉ CPU/RAM.
+
+== 39) TRIỂN KHAI & VẬN HÀNH ==
+
+Docker image tối giản (distroless/alpine khi hợp).
+
+Cấu hình qua env/secret; không bake vào image.
+
+Readiness/Liveness probe; graceful shutdown.
+
+Giới hạn tài nguyên (CPU/memory) theo profile workload.
+
+== 40) BẢO MẬT ỨNG DỤNG WEB ==
+
+CSRF cho form stateful; CORS cấu hình whitelist.
+
+Input validation + output encoding; file upload kiểm tra MIME/size.
+
+Rate limiting cho endpoint quan trọng; captcha khi cần.
+
+Sử dụng OAuth2/OpenID Connect khi tích hợp SSO; quản lý refresh token cẩn thận.
+
+JWT: ký bằng thuật toán mạnh; set exp ngắn; rotate keys.
+
+== 41) QUẢN LÝ LỖI & THÔNG BÁO NGƯỜI DÙNG ==
+
+Không rò rỉ stack trace ra client; trả mã lỗi + message thân thiện.
+
+Mapping exception → error code nhất quán.
+
+Ghi log đầy đủ để truy vết, nhưng không log PII.
+
+== 42) ANTI-PATTERNS CẦN TRÁNH ==
+
+God object, anemic domain model không có behavior.
+
+Over-engineering: tạo abstraction khi chưa cần.
+
+Lạm dụng reflection, static state chung, singletons toàn cục.
+
+Sử dụng hệ thống event bất đồng bộ cho logic cần nhất quán mạnh mà không bảo đảm thứ tự/transaction.
+
+Lạm dụng caching để giấu vấn đề dữ liệu chậm.
+
+== 43) QUẢN LÝ CẤU HÌNH ==
+
+Cấu hình có default hợp lý; validate lúc khởi chạy.
+
+Không trộn config code và business code.
+
+Profile theo môi trường; secrets tách riêng.
+
+== 44) QUY TẮC VỀ API NỘI BỘ (MODULE/CLASS) ==
+
+Giảm visibility: private/protected/package-private khi đủ.
+
+Không trả về tham chiếu mutable của field nội bộ.
+
+Không lộ collection mutable; trả về copy/immutable.
+
+== 45) KÝ TÊN (ANNOTATIONS) ==
+
+Dùng @Override khi override; @FunctionalInterface khi appropriate.
+
+Tránh custom annotation phức tạp nếu không thực sự cần.
+
+Không lạm dụng Lombok; nếu dùng, hiểu rõ @Data vs @Value vs @Builder và tác động equals/hashCode/toString.
+
+== 46) LÀM VIỆC VỚI KAFKA/RABBITMQ (NẾU CÓ) ==
+
+Schema versioning (Avro/Protobuf); backward compatibility.
+
+Idempotent consumer/producer; offset/ack rõ ràng.
+
+Dead-letter queue; retry/backoff có giới hạn; monitoring lag.
+
+== 47) FILE UPLOAD/DOWNLOAD ==
+
+Giới hạn kích thước; quét virus khi cần.
+
+Lưu tạm an toàn; đặt tên file an toàn; không tin cậy filename client.
+
+== 48) QUY TẮC VỀ UI BACKEND (THIN CONTROLLER) ==
+
+Controller mỏng; ủy thác về service.
+
+Không trộn logic domain vào controller hoặc repository.
+
+Response chuẩn: data + metadata (paging) + error format.
+
+== 49) MIGRATION & EVOLUTION ==
+
+Dùng công cụ migration DB (Flyway/Liquibase).
+
+Zero-downtime khi có thể (expand/contract pattern).
+
+Feature flags để rollout an toàn.
+
+== 50) QUẢN LÝ TÀI NGUYÊN ==
+
+Mọi resource phải được đóng (try-with-resources).
+
+Thread pool: kích thước phù hợp; shutdown trong shutdown hook.
+
+Hạn chế tạo mới HttpClient/DB connection; tái sử dụng pool.
+
+== 51) JAVA VERSION & COMPAT ==
+
+Ưu tiên LTS (11/17/21) trong sản xuất; kiểm soát ngôn ngữ/tính năng phù hợp runtime.
+
+Không dùng API internal/sun.*.
+
+Ghi rõ targetCompatibility/sourceCompatibility (Gradle) hoặc maven-compiler-plugin.
+
+== 52) CODE REVIEW CHECKLIST NGẮN GỌN ==
+
+Tên rõ ràng? Hàm ngắn? Không logic trùng?
+
+Null-safety/Optional đúng? Collection immutable chỗ cần?
+
+Exception có message/cause? Không swallow?
+
+Transaction/migration đúng? N+1? Index?
+
+Test đủ happy & edge case? Build xanh?
+
+Logging mức hợp lý? Không log secrets?
+
+Config theo profile? Tài liệu thay đổi kèm PR?
+
+== 53) TÀI LIỆU API NGẮN GỌN ==
+
+Contract ổn định; ví dụ request/response; mã lỗi thống nhất.
+
+Thống nhất chuẩn (OpenAPI/Swagger); publish spec kèm CI.
+
+== 54) QUY TẮC PHÂN TẦNG (LAYERING) ==
+
+Controller → Service (domain) → Repository/Client.
+
+Không gọi chéo “ngược tầng” (controller chạm repo trực tiếp).
+
+Tách port/adapters (hexagonal) khi cần mở rộng.
+
+== 55) QUẢN LÝ DEPLOY & CI/CD ==
+
+Pipeline: build → test → scan → package → deploy.
+
+Chặn merge khi test fail/quality gate fail.
+
+Artifact version hóa; rollback plan sẵn sàng.
+
+== 56) QUẢN LÝ PHỤ THUỘC NGOÀI ==
+
+Tối thiểu hóa library; đánh giá an ninh/CVE.
+
+Không tự viết lại thứ mà JDK/Spring đã cung cấp ổn định.
+
+== 57) DOCUMENTATION LIVE (OPENAPI/SPRING REST DOCS) ==
+
+Gen tự động spec mỗi build; đồng bộ với code.
+
+Ví dụ minh họa “thật” từ test (REST Docs).
+
+== 58) QUY TẮC ĐO LƯỜNG CHẤT LƯỢNG ==
+
+Theo dõi: test pass %, coverage theo module quan trọng, cyclomatic complexity, hotspots (churn x complexity).
+
+Sửa nợ kỹ thuật có kế hoạch (debt register).
+
+== 59) QUY TẮC DÀNH CHO LIB/SDK NỘI BỘ ==
+
+API nhỏ, ổn định; không ràng buộc framework vào core.
+
+Javadoc và example code bắt buộc.
+
+Semver nghiêm túc; changelog.
+
+== 60) MỘT SỐ BEST PRACTICES NHANH (TỔNG HỢP) ==
+
+Dùng records cho DTO/value (Java 16+) khi phù hợp.
+
+Pattern matching for instanceof (Java 16+) để code gọn.
+
+Sealed classes (Java 17+) cho domain hierarchy kín.
+
+Switch expression (Java 14+) ngắn gọn; thêm default có chủ ý.
+
+Prefer Path/Files thay vì File cũ.
+
+Objects.equals/compare/requireNonNull thay vì tự viết.
+
+Đặt Locale rõ ràng cho format/parsing.
+
+Sử dụng ResourceBundle cho i18n.
+
+Bọc API bên thứ ba bằng adapter riêng; chống “leak” vào domain.
+
+== 61) QUY TẮC VỀ ERROR CODE & DOMAIN ERROR ==
+
+Chuẩn hóa mã lỗi (VD: USER_001 = “User not found”).
+
+Không lẫn lộn message dev và message end-user.
+
+Mapping Exception → ErrorResponse ở một nơi duy nhất.
+
+== 62) QUY TẮC VỀ FEATURE FLAGS ==
+
+Flag phải có owner, thời hạn xoá; không để cờ “vĩnh viễn”.
+
+Test cả on/off; theo dõi metrics khi bật dần.
+
+== 63) QUY TẮC VỀ TÍCH HỢP BÊN THỨ BA ==
+
+Timeouts, retry với backoff, circuit breaker (resilience4j).
+
+Idempotent request (key) cho POST quan trọng.
+
+Ký log requestId/traceId khi gọi ra ngoài.
+
+== 64) QUY TẮC VỀ PAGINATION & TÌM KIẾM ==
+
+Cursor/offset rõ ràng; trả tổng (nếu cần) có chi phí?
+
+Giới hạn size tối đa; sắp xếp mặc định rõ ràng.
+
+Chỉ mục phù hợp nếu truy vấn phức tạp.
+
+== 65) QUY TẮC VỀ FILE/IMAGE PROCESSING ==
+
+Kiểm tra định dạng, kích thước, header thực; không tin content-type client.
+
+Stream xử lý; không load toàn bộ hình lớn vào bộ nhớ.
+
+== 66) QUY TẮC VỀ EMAIL/SMS/NOTIFICATION ==
+
+Tách provider qua port; queue gửi không đồng bộ.
+
+Template i18n; retry + DLQ.
+
+Deduplicate theo key để tránh spam.
+
+== 67) QUY TẮC VỀ SỐ HỌC/TIỀN TỆ ==
+
+Dùng BigDecimal cho tiền; set scale và RoundingMode rõ ràng.
+
+Tránh double cho so sánh chính xác; dùng epsilon nếu bắt buộc.
+
+== 68) QUY TẮC VỀ GEO/TIMEZONE ==
+
+Lưu UTC; convert ở presentation.
+
+Dùng ZoneId cho user; tránh “GMT+7” hardcode.
+
+== 69) QUY TẮC VỀ REPORTING/EXPORT ==
+
+Stream CSV/Excel; escape đúng; set content-disposition.
+
+Giới hạn kích thước/timeout; export async nếu lớn.
+
+== 70) QUY TẮC VỀ TÀI LIỆU KIẾN TRÚC ==
+
+Sơ đồ context/container/component; cập nhật khi thay đổi lớn.
+
+Mỗi quyết định lớn có ADR; lý do + phương án loại trừ.
+
+== 71) QUY TẮC VỀ HỢP ĐỒNG GIAO TIẾP (EVENT/REST/GRPC) ==
+
+Chọn giao thức theo use-case; không ép tất cả vào REST.
+
+Version sự kiện; schema registry; phụ thuộc lỏng (loose coupling).
+
+== 72) QUY TẮC VỀ STARTUP & HEALTH ==
+
+Kiểm tra dependency ở startup; fail fast nếu thiếu cấu hình.
+
+Health/Ready endpoint kiểm tra DB/queue/remote API.
+
+== 73) QUY TẮC VỀ CLEANUP & SHUTDOWN ==
+
+Đăng ký shutdown hook; đóng pool/connection.
+
+Đảm bảo in-flight request hoàn tất hoặc hủy có kiểm soát.
+
+== 74) QUY TẮC VỀ RANDOMNESS/UUID ==
+
+Sử dụng SecureRandom cho nhu cầu bảo mật.
+
+UUID v4 cho id ngẫu nhiên; cân nhắc ULID khi cần sort.
+
+== 75) QUY TẮC VỀ REFLECTION & DYNAMIC PROXY ==
+
+Hạn chế; gây khó test và tối ưu. Bọc lại và document lý do dùng.
+
+== 76) QUY TẮC VỀ MIGRATION JDK/FRAMEWORK ==
+
+Có ma trận test cho version JDK/lib mới.
+
+Kiểm tra tính tương thích bytecode và toolchain (Gradle/Maven plugin).
+
+== 77) QUY TẮC VỀ CODE GEN (LOMBOK/MAPSTRUCT/OPENAPI) ==
+
+Review code sinh ra; tránh ẩn lỗi.
+
+Lock version plugin; kiểm tra tại CI.
+
+== 78) QUY TẮC VỀ TƯƠNG TÁC HỆ THỐNG (OS/PROC) ==
+
+Không chạy lệnh hệ thống nếu không cần; sanitize input nếu bắt buộc.
+
+Giám sát resource external process; timeouts.
+
+== 79) QUY TẮC VỀ SƠ ĐỒ LỚP/QUAN HỆ ==
+
+Tránh bidirectional association nếu không cần.
+
+Rõ ràng ownership/aggregation/composition.
+
+== 80) QUY TẮC VỀ TƯƠNG THÍCH QUỐC TẾ (I18N/L10N) ==
+
+Không hardcode text; dùng bundle.
+
+Định dạng số/ngày theo Locale; test đa locale.
+
+== 81) QUY TẮC VỀ PHÂN QUYỀN (AUTHZ) ==
+
+Quyền theo role/permission; kiểm tra ở boundary (controller/service).
+
+Nguyên tắc “least privilege”.
+
+== 82) QUY TẮC VỀ TẢI LỚN (SCALE) ==
+
+Stateless khi có thể; session externalized (Redis).
+
+Idempotent endpoints; backpressure.
+
+Tách đọc/ghi nếu phù hợp (CQRS đơn giản).
+
+== 83) QUY TẮC VỀ TÍNH TOÀN VẸN DỮ LIỆU ==
+
+Ràng buộc ở DB (NOT NULL, UNIQUE, FK); validate ở app.
+
+Sử dụng transaction boundary đúng; audit log cho thay đổi quan trọng.
+
+== 84) QUY TẮC VỀ LẬP LỊCH/NHIỆM VỤ NỀN ==
+
+Spring @Scheduled hoặc Quartz; đơn vị thời gian rõ ràng; idempotent.
+
+Lock phân tán khi chạy multi-instance.
+
+== 85) QUY TẮC VỀ PHẢN HỒI NGƯỜI DÙNG/UX API ==
+
+Error message có mã, mô tả, cách khắc phục (nếu hợp lý).
+
+Tài liệu endpoint rõ ràng để tự phục vụ.
+
+== 86) QUY TẮC VỀ HÌNH ẢNH/STATIC CONTENT ==
+
+ETag/Cache-Control; CDN khi cần.
+
+Kiểm tra MIME thực tế; không tin extension.
+
+== 87) QUY TẮC VỀ HOẠT ĐỘNG ĐỊNH KỲ ==
+
+Dọn log/backup định kỳ; rotation.
+
+Kiểm tra chứng chỉ TLS, keys trước khi hết hạn.
+
+== 88) QUY TẮC VỀ PHÁT TRIỂN TEAM ==
+
+Định nghĩa xong “Definition of Done”: code, test, doc, review, security scan.
+
+Coding standard được tự động hóa bằng formatter/linter trong CI.
+
+== 89) QUY TẮC VỀ TÀI NGUYÊN CLOUD ==
+
+Không phụ thuộc đường dẫn/hardcode host.
+
+Đọc config từ env/secret; IAM role thay vì key cố định.
+
+== 90) QUY TẮC VỀ TƯƠNG TÁC TRÌNH DUYỆT (NẾU CÓ) ==
+
+JSON chính xác; CORS cấu hình đúng origin/method/headers.
+
+Compression (GZIP) và HTTP caching phù hợp.
+
+== 91) QUY TẮC VỀ THƯ VIỆN MÃ HÓA (CRYPTO) ==
+
+Dùng thư viện chuẩn; không tự tạo thuật toán.
+
+Quản lý key an toàn; rotate định kỳ.
+
+== 92) QUY TẮC VỀ TÌM KIẾM NÂNG CAO (ELASTIC/LUCENE) ==
+
+Map schema rõ ràng; index lifecycle.
+
+Tránh query wildcard nặng; phân trang sâu dùng search_after/scroll.
+
+== 93) QUY TẮC VỀ FEATURE TOGGLING RUNTIME ==
+
+Flag server-side; audit ai bật/tắt; sync đa instance.
+
+== 94) QUY TẮC VỀ HOTFIX/ROLLBACK ==
+
+Hotfix branch nhỏ, test nhanh; tag version sau fix.
+
+Rollback script/kế hoạch rõ; dữ liệu backward compatible.
+
+== 95) QUY TẮC VỀ CODE STYLE ĐẶC THÙ JAVA ==
+
+this. chỉ khi cần phân biệt; @Override mọi nơi có thể.
+
+switch expression thay if-else dài; record cho data carrier.
+
+Var (Java 10) cho local rõ nghĩa; không lạm dụng mơ hồ.
+
+== 96) QUY TẮC VỀ TẢI TRỌNG LỚN/UPLOAD API ==
+
+Multipart cấu hình size/timeout; scan; lưu ngoài nếu lớn (S3/GCS).
+
+Tạo link tải có thời hạn (pre-signed).
+
+== 97) QUY TẮC VỀ TÁCH MICROSERVICE (NẾU DÙNG) ==
+
+Dữ liệu sở hữu bởi service; giao tiếp qua API/event.
+
+Observability liên dịch vụ (tracing).
+
+Không chia nhỏ khi chưa có nhu cầu thực (monolith trước).
+
+== 98) QUY TẮC VỀ SỰ KIỆN DOMAIN ==
+
+Tên event quá khứ (OrderCreated).
+
+Event bất biến; version; tránh chứa quá nhiều dữ liệu nhạy cảm.
+
+== 99) QUY TẮC VỀ CLEAN ARCH/HEXAGONAL ==
+
+Port (interface) ở domain; adapter ở infrastructure.
+
+Domain thuần Java (không phụ framework).
+
+Wiring ở composition root (Spring config).
+
+== 100) BỘ CÔNG CỤ KHUYẾN NGHỊ ==
+
+Linter/format: Spotless, Google Java Format, Checkstyle.
+
+Static analysis: SpotBugs, PMD, Sonar.
+
+Test: JUnit 5, AssertJ, Mockito, Testcontainers.
+
+Build: Gradle/Maven với BOM.
+
+Observability: Micrometer, OpenTelemetry.
+
+Security scan: OWASP Dependency-Check, Snyk.

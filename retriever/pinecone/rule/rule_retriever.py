@@ -63,8 +63,8 @@ class PineconeRuleRetriever(BaseRuleRetriever):
         *,
         language: str,
         source_path: str | None = None,
-        chunk_size: int = 200,
-        chunk_overlap: int = 20,
+        chunk_size: int = 300,
+        chunk_overlap: int = 30,
     ) -> int:
         """
         Ingest .txt into Pinecone via LangChain:
