@@ -118,6 +118,8 @@ class ChatConversation:
             logger.exception(f"[chat] Lỗi LLM khi thực hiện fix code: {e}")
             return None, "Không thể kết nối model để chạy fix. Kiểm tra cấu hình Provider/API key."
 
+        logger.info(f"[chat] LLM trả về bản fix (markdown):\n{fixed_md}")
+        
         # Extract code đã fix
         fixed_code = extract_code_block(fixed_md)
         if not fixed_code:

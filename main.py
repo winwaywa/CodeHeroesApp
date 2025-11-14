@@ -131,9 +131,10 @@ with st.container(border=True):
                 n=3
             )
             st.components.v1.html(
-                f'{diff_html}',
+                diff_html,
                 height=380,
-                scrolling=True
+                scrolling=True,
+                width=None
             )
     else:
         st.caption("Code đã fix sẽ hiển thị ở đây !")
