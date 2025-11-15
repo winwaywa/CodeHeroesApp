@@ -10,9 +10,13 @@ from config.logging import logger
 from retriever.pinecone.rule.rule_retriever import PineconeRuleRetriever
 from stores.session_state_store import SessionState, SessionStateStore
 from utils.markdown import extract_code_block
-
-from chat.prompts import build_rule_answer_prompt
-from chat.prompts import build_fix_prompt, build_summary_prompt, build_system_context
+from chat.prompts import (
+    build_rule_answer_prompt,
+    build_fix_prompt,
+    build_summary_prompt,
+    build_system_context,
+    build_review_prompt,   # 👈 thêm dòng này
+)
 from utils.tokens import count_tokens_tiktoken
 
 def _safe_json_parse(s: Optional[str]) -> Dict[str, Any]:
@@ -94,6 +98,92 @@ class ChatConversation:
         except Exception as e:
             logger.exception(f"[chat] Lỗi LLM khi tóm tắt thay đổi code: {e}")
             return ""
+
+    def _handle_review_code(
+        self,
+        *,
+        model: str,
+        language: str,
+        base_code: str,
+        review_focus: str,
+        question:str = "",
+    ) -> str:
+        """
+        Review / đánh giá code hiện tại, có kết hợp RAG rules (Pinecone).
+        - Lấy code hiện tại (origin_code hoặc fixed_code)
+        - Lấy các rule liên quan từ Pinecone
+        - Gọi LLM để review dựa trên code + rules, dùng build_review_prompt
+        """
+        logger.info("[chat] 🔍 Bắt đầu review code (kết hợp RAG rules)")
+
+        if not (base_code or "").strip():
+            return "⚠️ Chưa có code để review. Hãy dán code vào panel trước đã nhé."
+
+        # 1) Chuẩn bị query để tìm rule: ưu tiên review_focus, fallback sang câu hỏi user
+        lang = (language or "text").strip()
+        query = review_focus.strip()
+
+        # 2) Gọi retriever để lấy rules liên quan
+        try:
+            res = self.rule_retriever.search(
+                query=query,
+                language=lang,
+                k=6,
+                score_threshold=0.25,
+            )
+        except Exception as e:
+            logger.exception(f"[chat] ❌ Lỗi khi search rule cho review: {e}")
+            res = None
+
+        # 3) Chuẩn hoá snippets -> list[dict] để truyền cho build_review_prompt
+        snippet_dicts: list[dict] = []
+        if res and getattr(res, "hits", 0) > 0:
+            logger.info(f"[chat] ✅ Tìm được {len(res.snippets or [])} rule liên quan cho review")
+            for i, s in enumerate(res.snippets or [], start=1):
+                if hasattr(s, "__dict__"):
+                    d = s.__dict__
+                else:
+                    d = dict(s) if isinstance(s, dict) else {"content": str(s)}
+                snippet_dicts.append(
+                    {
+                        "content": d.get("summary") or "",
+                        "source": d.get("source_path")  or "",
+                    }
+                )
+        else:
+            logger.info("[chat] ⚠️ Không tìm được rule phù hợp cho review, sẽ review theo kinh nghiệm chung")
+
+        logger.info(f"[chat] Sử dụng {snippet_dicts} rule để review code")
+
+        # 4) Build prompt (system + user) bằng helper
+        prompt = build_review_prompt(
+            language=language,
+            base_code=base_code,
+            question=question,
+            review_focus=query,
+            rule_snippets=snippet_dicts,
+        )
+
+        messages = [
+            ChatMessage("system", prompt["system"]),
+            ChatMessage("user", prompt["user"]),
+        ]
+        logger.info(f"[chat] Messages LLM review code:\n{_format_chat_messages(messages)}")
+
+        # 5) Gọi LLM
+        try:
+            reply = self.client.chat_completion(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+            ) or ""
+            return reply.strip()
+        except Exception as e:
+            logger.exception(f"[chat] ❌ Lỗi LLM khi review code: {e}")
+            return (
+                "Mình chưa review được code do lỗi kết nối model. "
+                "Bạn kiểm tra lại cấu hình Provider/API key giúp nhé."
+            )
 
     def _handle_fix_code(
         self, *, model: str, language: str, base_code: str, fix_instructions: str
@@ -252,9 +342,34 @@ class ChatConversation:
                 reply = self._handle_search_rule(args=args, language=language, question=question, model=model)
                 return (reply, state, False)
 
+            if name == "run_review":
+                base_code = (latest_fixed or origin_code or "").strip()
+                if not base_code:
+                    return ("⚠️ Chưa có code để review. Hãy dán code vào panel trước đã nhé.", state, False)
+
+                logger.info(f"[chat] Bắt đầu review code với args: {args}")
+
+                raw_focus = args.get("review_focus", question)
+                if isinstance(raw_focus, (list, tuple)):
+                    raw_focus = "\n".join(map(str, raw_focus))
+                elif not isinstance(raw_focus, str):
+                    raw_focus = str(raw_focus or "")
+                review_focus = raw_focus.strip()
+
+                reply_msg = self._handle_review_code(
+                    model=model,
+                    language=language,
+                    base_code=base_code,
+                    review_focus=review_focus,
+                    question=question,
+                )
+                return (reply_msg, state, False)
+
             if name == "run_fix":
                 base_code = (latest_fixed or origin_code or "").strip()
                 if not base_code:
+                    # (Đoạn này anh đang return sai kiểu, nhưng nếu app đang chạy ổn thì có thể giữ nguyên,
+                    # hoặc sửa thành: return ("⚠️ ...", state, False))
                     return None, "⚠️ Chưa có code để sửa. Hãy dán code hoặc yêu cầu review trước."
                 raw_ins = args.get("fix_instructions", question)
                 if isinstance(raw_ins, (list, tuple)):
@@ -271,6 +386,7 @@ class ChatConversation:
                     state.fixed_code = fixed_code
 
                 return (reply_msg, state, True)
+
 
         # Không có tool-call -> trả lời trực tiếp
         if not content:

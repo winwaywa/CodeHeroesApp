@@ -2,6 +2,7 @@
 
 from typing import Dict
 
+# ============== Dùng cho chatbot để sửa code theo yêu cầu ==============
 def build_fix_prompt(*, language: str, base_code: str, fix_instructions: str) -> Dict[str, str]:
     system = (
         "Bạn là trợ lý chỉnh sửa code. "
@@ -18,7 +19,7 @@ def build_fix_prompt(*, language: str, base_code: str, fix_instructions: str) ->
     return {"system": system, "user": user}
 
 
-
+# ============== Dùng cho chatbot để tóm tắt thay đổi giữa 2 phiên bản code ==============
 def build_summary_prompt(*, language: str, base_code: str, fixed_code: str) -> Dict[str, str]:
     system = (
         "Bạn là reviewer giàu kinh nghiệm. Hãy so sánh hai phiên bản code và "
@@ -33,36 +34,42 @@ def build_summary_prompt(*, language: str, base_code: str, fixed_code: str) -> D
     return {"system": system, "user": user}
 
 
+# ============== Dùng cho chatbot để chọn tool ==============
 def build_system_context(*, origin_code: str, latest_fixed: str, language: str) -> str:
-    """
-    Trả về system context an toàn, bao gồm source gốc và (nếu có) bản fix gần nhất.
-    """
     system = (
-        "Bạn là trợ lý hỗ trợ về code (review, giải thích, sửa lỗi, cải tiến). Trả lời ngắn gọn, rõ ràng, bằng tiếng Việt.\n"
-        "- Khi người dùng hỏi hoặc yêu cầu review/giải thích code (ví dụ: 'giải thích đoạn code', 'đánh giá code này'): trả lời trực tiếp, KHÔNG dùng tool.\n"
-        "- Khi người dùng yêu cầu sửa/refactor/điều chỉnh code (ví dụ: 'hãy sửa lỗi', 'refactor giúp tôi'): hãy gọi function `run_fix` với tham số `fix_instructions`.\n"
-        "- Khi người dùng hỏi về quy tắc, chuẩn code, best practice, đặt tên biến/hàm, coding convention: hãy gọi function `search_rule` với tham số `query` và `language`.\n"
-        "- Tuyệt đối KHÔNG tự ý sửa code nếu không có yêu cầu rõ ràng từ người dùng.\n"
-        "- Nếu người dùng đề cập vấn đề ngoài phạm vi lập trình/code: trả về câu fallback ngắn rằng bạn chỉ hỗ trợ về code, sau đó mời họ đặt câu hỏi liên quan đến code.\n"
-
+        "Bạn là trợ lý hỗ trợ về code (giải thích, review, sửa lỗi, cải tiến). Trả lời ngắn gọn, rõ ràng, bằng tiếng Việt.\n"
+        "\n"
+        "- Khi người dùng yêu cầu GIẢI THÍCH code (ví dụ: 'giải thích đoạn code', 'dòng này làm gì?'): trả lời trực tiếp, KHÔNG dùng tool.\n"
+        "- Khi người dùng yêu cầu REVIEW / ĐÁNH GIÁ code (ví dụ: 'review giúp đoạn code này', 'đánh giá code này có ổn không', "
+        "'xem giúp mình code này đã tối ưu chưa'): hãy gọi function `run_review` với tham số `review_focus` mô tả ngắn gọn trọng tâm cần đánh giá.\n"
+        "- Khi người dùng yêu cầu SỬA / REFACTOR / TỐI ƯU code (ví dụ: 'hãy sửa lỗi', 'refactor giúp tôi', 'tối ưu hiệu năng đoạn này'): "
+        "hãy gọi function `run_fix` với tham số `fix_instructions`.\n"
+        "- Khi người dùng hỏi về QUY TẮC, PRETTY CODE, BEST PRACTICE, CODING CONVENTION, cách đặt tên biến/hàm nhưng mà không đề cập đến REVIEW, Đánh giá code: hãy gọi function `search_rule` "
+        "với tham số `query` và `language`.\n"
+        "- Tuyệt đối KHÔNG tự ý sửa code nếu người dùng không yêu cầu rõ ràng.\n"
+        "- Nếu người dùng hỏi ngoài phạm vi lập trình/code: trả về một câu ngắn rằng bạn chỉ hỗ trợ về code và mời họ đặt câu hỏi khác.\n"
+        "\n"
         f"Source gốc người dùng nhập vào:\n```\n{origin_code}\n```\n"
         f"Ngôn ngữ: {language}\n"
     )
     if latest_fixed:
-        system += f"Phiên bản code đã fix gần nhất:\n```\n{latest_fixed}\n```\n"
+        system += (
+            "Phiên bản code đã fix gần nhất:\n"
+            f"```\n{latest_fixed}\n```\n"
+        )
     return system
 
+
+
+# ============== Dùng cho chatbot trả lời câu hỏi dựa trên RULES + QUESTION ==============
 def build_rule_answer_prompt(*, question: str, rule_snippets: list[dict]) -> dict:
-    """
-    Tạo prompt để LLM trả lời câu hỏi dựa trên RULES + QUESTION (ngữ cảnh).
-    """
     bullets = "\n".join(
         f"- {s.get('summary','').strip()} (source: {s.get('source_path','unknown')})"
         for s in (rule_snippets or [])[:4]
     )
 
     system_prompt = (
-        "Bạn là code reviewer/assistant. Trả lời NGẮN GỌN, CHÍNH XÁC dựa trên RULES cung cấp. "
+        "Bạn là code trợ lý hỏi đáp về code. Trả lời NGẮN GỌN, CHÍNH XÁC dựa trên RULES cung cấp. "
         "Nếu có mâu thuẫn giữa các RULES, hãy nêu rõ và chọn phương án hợp lý. "
         "Luôn kèm citation (source) ở các gợi ý quan trọng. Không bịa thông tin ngoài RULES."
     )
@@ -74,4 +81,74 @@ def build_rule_answer_prompt(*, question: str, rule_snippets: list[dict]) -> dic
         "- Nêu được lý do/nguyên tắc liên quan từ RULES (kèm source).\n"
         "- Nếu RULES không đủ, nói rõ giới hạn thay vì suy đoán."
     )
+    return {"system": system_prompt, "user": user_prompt}
+
+# ============== Dùng cho chatbot để REVIEW code ==============
+def build_review_prompt(
+    *,
+    language: str,
+    base_code: str,
+    question: str,
+    review_focus: str,
+    rule_snippets: list[dict],
+) -> dict:
+    """
+    Build prompt cho việc REVIEW code (có thể có/không có RULES từ RAG).
+    - Chỉ review trong phạm vi các tiêu chí được nêu trong review_focus.
+    - Không mở rộng sang các khía cạnh khác.
+    """
+
+    # Ghép RULES nếu có
+    rules_text = ""
+    if rule_snippets:
+        parts = []
+        for i, s in enumerate(rule_snippets, start=1):
+            content = (s.get("content") or "").strip()
+            source = (s.get("source") or "").strip()
+            meta_line = f"{source}" if source else ""
+            parts.append(f"{i}. Dữ liệu này trích từ source path: {meta_line}\n{content}")
+        rules_text = "\n\n".join(parts)
+
+    # ========== SYSTEM PROMPT: Đưa hết yêu cầu vào đây ==========
+    system_prompt = (
+        "Bạn là một lead developer giàu kinh nghiệm, chuyên review code cho team.\n"
+        "\n"
+        "NGUYÊN TẮC BẮT BUỘC KHI REVIEW:\n"
+        "- Chỉ được review trong PHẠM VI những tiêu chí được nêu trong phần 'Những điểm cần tập trung review'.\n"
+        "- Không được lan man hoặc mở rộng sang các khía cạnh khác nếu chúng không nằm trong những tiêu chí đó.\n"
+        "- Nếu phát hiện vấn đề ở khía cạnh ngoài phạm vi, BỎ QUA và KHÔNG đề cập đến (trừ khi người dùng yêu cầu thêm).\n"
+        "- Ưu tiên sử dụng các RULES (nếu có) được cung cấp trong context để lập luận và đưa ra gợi ý.\n"
+        "- Trình bày ngắn gọn, rõ ràng, bằng tiếng Việt, dưới dạng bullet.\n"
+        "- Mỗi bullet chỉ nên tập trung vào MỘT ý cụ thể gắn với MỘT tiêu chí trong 'Những điểm cần tập trung review'. Cần reference thêm source path nếu sử dụng RULES từ RAG\n"
+        "- Không tự ý viết lại toàn bộ code, chỉ nêu nhận xét và gợi ý cải thiện.\n"
+    )
+
+    # ========== USER PROMPT: Bối cảnh + dữ liệu ==========
+    if rules_text:
+        user_prompt = (
+            f"Yêu cầu của người dùng:\n{question}\n\n"
+            f"Những điểm cần tập trung review (PHẠM VI DUY NHẤT):\n{review_focus}\n\n"
+            "Dưới đây là một số RULES / BEST PRACTICES liên quan (trích từ RAG):\n"
+            "----------------------------------------\n"
+            f"{rules_text}\n"
+            "----------------------------------------\n\n"
+            "Đoạn code cần review:\n"
+            "```code\n"
+            f"{base_code}\n"
+            "```\n"
+            f"Ngôn ngữ code: {language}\n"
+        )
+    else:
+        user_prompt = (
+            f"Yêu cầu của người dùng:\n{question}\n\n"
+            f"Những điểm cần tập trung review (PHẠM VI DUY NHẤT):\n{review_focus}\n\n"
+            "Không có RULES cụ thể trả về từ RAG. Hãy review dựa trên kinh nghiệm cá nhân, "
+            "nhưng vẫn CHỈ trong phạm vi các tiêu chí đã nêu.\n\n"
+            "Đoạn code cần review:\n"
+            "```code\n"
+            f"{base_code}\n"
+            "```\n"
+            f"Ngôn ngữ code: {language}\n"
+        )
+
     return {"system": system_prompt, "user": user_prompt}
