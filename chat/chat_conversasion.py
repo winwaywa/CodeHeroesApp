@@ -254,7 +254,9 @@ class ChatConversation:
         lang = (args.get("language") or language or "").strip()
         if not query or not lang:
             return "Thiếu từ khóa hoặc ngôn ngữ để tìm rule."
-
+        
+        logger.info(f"[chat] 🔍 Tìm rule với query='{query}' và language='{lang}'")
+        
         # 1) Gọi retriever
         res = self.rule_retriever.search(query=query, language=lang, k=6, score_threshold=0.25)
 

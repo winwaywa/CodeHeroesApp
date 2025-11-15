@@ -632,3 +632,16 @@ Web: FastAPI/Starlette, Django/DRF.
 Observability: structlog/loguru (tuỳ), OpenTelemetry, prometheus-client.
 
 Security: bandit, safety, pip-audit.
+
+== 101) QUY TẮC ĐẶT TÊN CLASS PYTHON ==
+
+- Sử dụng PascalCase cho mọi class: Viết hoa chữ cái đầu của mỗi từ, không dùng gạch dưới.
+- Tên class phải thể hiện rõ vai trò: Entity, ValueObject, Service, Repository, Adapter…
+- Tránh tên mơ hồ: Không dùng Data, Helper, Util nếu không thực sự mô tả bản chất.
+- Với Adapter/Implementation: Tên dạng <TênPort><Backend> (ví dụ: UserRepoSQL, LLMClientAzure).
+- Với Abstract Base Class / Port: Thêm hậu tố Base hoặc Port (ví dụ: UserRepoPort, BaseCache).
+- Không dùng chữ viết tắt trừ khi thực sự phổ biến (API, ID, URL…).
+- Class Exception: thêm hậu tố Error hoặc Exception (InvalidStateError, TokenExpiredException).
+- Tránh đặt tên class theo hành động (LoadFile, GetUser): hãy dùng danh từ (FileLoader, UserFetcher).
+- Với domain model: Nếu là aggregate root, dùng tên rõ ràng và không viết tắt (UserProfile, OrderItem).
+- Với config/settings: Tên dạng <Scope>Settings (AppSettings, DatabaseSettings).
