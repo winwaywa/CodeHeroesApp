@@ -105,7 +105,8 @@ def build_review_prompt(
         for i, s in enumerate(rule_snippets, start=1):
             content = (s.get("content") or "").strip()
             source = (s.get("source") or "").strip()
-            parts.append(f"{i}. Source: {source}\n{content}")
+            parts.append(f"-------------- \n {content}\n (Source path của đoạn trên: {source})")
+
         rules_text = "\n\n".join(parts)
 
     # ========== SYSTEM PROMPT: Đưa hết yêu cầu vào đây ==========
@@ -119,7 +120,7 @@ def build_review_prompt(
         "• Trình bày NGẮN GỌN – RÕ RÀNG – DỄ ĐỌC bằng tiếng Việt.\n"
         "• Trả lời dưới dạng bullet, mỗi bullet bắt đầu bằng ký hiệu 💡 và tiêu chí **được bôi đen**.\n"
         "• Mỗi bullet chỉ gồm MỘT nhận xét tương ứng với MỘT tiêu chí duy nhất.\n"
-        "• Nếu áp dụng RULES, hãy nêu ngắn gọn lý do hoặc nguyên tắc liên quan (kèm source).\n"
+        "• Nếu áp dụng RULES, hãy nêu ngắn gọn lý do hoặc nguyên tắc liên quan kèm source path (ví dụ python_rule.txt)\n"
         "• Không viết lại toàn bộ code, chỉ đưa ra nhận xét và gợi ý cải thiện.\n"
         "• Cuối phần trả lời, thêm một đoạn nhận xét tổng quan ngắn.\n"
     )
