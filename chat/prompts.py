@@ -105,8 +105,7 @@ def build_review_prompt(
         for i, s in enumerate(rule_snippets, start=1):
             content = (s.get("content") or "").strip()
             source = (s.get("source") or "").strip()
-            meta_line = f"{source}" if source else ""
-            parts.append(f"{i}. Dữ liệu này trích từ source path: {meta_line}\n{content}")
+            parts.append(f"{i}. Source: {source}\n{content}")
         rules_text = "\n\n".join(parts)
 
     # ========== SYSTEM PROMPT: Đưa hết yêu cầu vào đây ==========
